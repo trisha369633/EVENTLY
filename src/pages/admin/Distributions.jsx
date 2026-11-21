@@ -436,7 +436,7 @@ function Distributions() {
         </div>
         {correctionTarget && (
           <form className="distribution-correction-form" onSubmit={(event) => void handleCorrection(event)}>
-            <div><strong>Correct distribution · {correctionTarget.item_name}</strong><small>{correctionTarget.participant_name} · {correctionTarget.net_quantity} units remain to correct</small></div>
+            <div><strong>Correct distribution · {correctionTarget.item_name}</strong><small>{correctionTarget.attendee_name || correctionTarget.participant_name} · {correctionTarget.attendee_type === 'guest' ? `Guest — ${correctionTarget.relationship}` : 'Main Participant'} · {correctionTarget.ticket_reference || 'Existing ticket'} · {correctionTarget.net_quantity} units remain to correct</small></div>
             <label className="form-field"><span>Quantity to correct</span><input type="number" min="1" max={correctionTarget.net_quantity} step="1" value={correctionQuantity} onChange={(event) => setCorrectionQuantity(event.target.value)} required /></label>
             <label className="form-field distribution-correction-reason"><span>Reason (required for audit)</span><input value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} maxLength={1000} required /></label>
             <div className="distribution-form-actions"><button className="button button-primary button-small" type="submit" disabled={correctionBusy}>{correctionBusy ? 'Saving…' : 'Record correction'}</button><button className="button button-outline button-small" type="button" onClick={() => setCorrectionTarget(null)}>Cancel</button></div>
@@ -452,7 +452,7 @@ function Distributions() {
                 <tr key={`${row.activity_type}-${row.activity_id}`}>
                   <td><span className={`ticket-status-badge ${row.activity_type === 'correction' ? 'is-revoked' : 'is-active'}`}>{row.activity_type === 'correction' ? 'Correction' : row.activity_status.replace('_', ' ')}</span></td>
                   <td><strong>{row.item_name}</strong><small>{row.event_title}</small></td>
-                  <td><strong>{row.participant_name}</strong><small className="capitalize">{row.participant_type}</small></td>
+                  <td><strong>{row.attendee_name || row.participant_name}</strong><small className="capitalize">{row.attendee_type === 'guest' ? `Guest — ${row.relationship}` : 'Main Participant'}</small><small>{row.ticket_reference || 'Registration:' + row.registration_id}</small></td>
                   <td>{row.quantity > 0 ? `+${row.quantity}` : row.quantity}</td>
                   <td>{row.net_quantity}</td>
                   <td><strong>{row.actor_name}</strong><small>{formatEventDateTime(row.activity_at)}</small></td>

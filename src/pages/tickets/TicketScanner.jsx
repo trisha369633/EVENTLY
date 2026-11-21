@@ -10,6 +10,7 @@ import {
   checkInAttendeeTicket,
   checkInEventTicket,
   getTicketScannerEvents,
+  validateAttendeeTicket,
 } from '../../services/ticketService.js'
 
 function TicketScanner({ workflow = 'entry' }) {
@@ -53,6 +54,7 @@ function TicketScanner({ workflow = 'entry' }) {
           throw new Error('Select assigned items and start scanning before scanning a participant.')
         }
         setContinuousResult([])
+        const resolvedTicket = await validateAttendeeTicket({ eventId, token: privateToken })
         const rows = await recordContinuousAttendeeDistribution({
           eventId,
           token: privateToken,
@@ -71,6 +73,7 @@ function TicketScanner({ workflow = 'entry' }) {
           participant_type: firstItem?.attendee_type,
           relationship: firstItem?.relationship,
           main_participant_name: firstItem?.main_participant_name,
+          ticket_reference: resolvedTicket?.ticket_reference,
         })
         setContinuousResult(rows)
         setDistributionError('')

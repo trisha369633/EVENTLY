@@ -51,23 +51,23 @@ function Navbar() {
     <>
       {canAccessParticipantWorkspace && canAccessVolunteerWorkspace
         ? <>
-          <a className="button button-outline button-small" href="/volunteer" onClick={closeMenu}>Volunteer Workspace</a>
-          <a className="button button-outline button-small" href="/dashboard" onClick={closeMenu}>Participant Dashboard</a>
+          <a className="nav-text-action" href="/volunteer" onClick={closeMenu}>Volunteer Workspace</a>
+          <a className="nav-text-action" href="/dashboard" onClick={closeMenu}>My Evently</a>
         </>
-        : <a className="button button-outline button-small" href={accountPath} onClick={closeMenu}>My Evently</a>}
+        : <a className="nav-text-action" href={accountPath} onClick={closeMenu}>My Evently</a>}
       {logoutConfirm ? (
         <>
-          <button className="button button-outline button-small" type="button" onClick={() => setLogoutConfirm(false)}>Cancel</button>
-          <button className="button button-primary button-small" type="button" onClick={() => void handleSignOut()}>Confirm sign out</button>
+          <button className="nav-text-action" type="button" onClick={() => setLogoutConfirm(false)}>Cancel</button>
+          <button className="nav-text-action" type="button" onClick={() => void handleSignOut()}>Confirm sign out</button>
         </>
       ) : (
-        <button className="button button-outline button-small" type="button" onClick={() => setLogoutConfirm(true)}>Sign out</button>
+        <button className="nav-text-action" type="button" onClick={() => setLogoutConfirm(true)}>Sign out</button>
       )}
     </>
   ) : (
     <>
-      <a className="button button-outline button-small" href="/login">Login</a>
-      <a className="button button-primary button-small" href="/register">Get Started</a>
+      <a className="nav-text-action" href="/login" onClick={closeMenu}>Login</a>
+      <a className="nav-text-action" href="/register" onClick={closeMenu}>Get Started</a>
     </>
   )
 

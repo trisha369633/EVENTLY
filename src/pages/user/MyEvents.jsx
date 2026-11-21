@@ -76,6 +76,7 @@ function MyEvents({ compact = false }) {
   const [retry, setRetry] = useState(0)
   const [benefitsByEvent, setBenefitsByEvent] = useState({})
   const [attendeeTicketsByRegistration, setAttendeeTicketsByRegistration] = useState({})
+  const [selectedRegistrationId, setSelectedRegistrationId] = useState('')
 
   useEffect(() => {
     let active = true
@@ -180,6 +181,15 @@ function MyEvents({ compact = false }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!selectedRegistrationId) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setSelectedRegistrationId('')
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [selectedRegistrationId])
+
   const [now] = useState(() => Date.now())
   const metrics = useMemo(() => {
     const active = registrations.filter((item) => item.registration_status === 'registered')
@@ -234,11 +244,30 @@ function MyEvents({ compact = false }) {
                 const ticket = ticketByRegistration[String(registration.id)]
                 const attendeeTickets = attendeeTicketsByRegistration[String(registration.id)] || []
                 const benefitsEventId = event?.event_id || event?.id
-                const benefits = benefitsEventId ? benefitsByEvent[String(benefitsEventId)] || [] : []
+                const benefits = (benefitsEventId
+                  ? (benefitsByEvent[String(benefitsEventId)] || [])
+                  : []
+                ).filter((benefit) => String(benefit.registration_id) === String(registration.id))
+                const benefitsByAttendee = benefits.reduce((groups, benefit) => {
+                  const key = String(benefit.attendee_id || benefit.attendee_type || 'participant')
+                  groups[key] = groups[key] || []
+                  groups[key].push(benefit)
+                  return groups
+                }, {})
                 const title = event?.title || 'Event details unavailable'
                 const hasPublicDetail = event?.slug && event.event_status === 'published'
                 const isPaid = Number(registration.fee_amount) > 0
+                const paymentApproved = !isPaid || payment?.payment_status === 'approved'
+                const canViewRegistration = registration.registration_status === 'registered' && paymentApproved
                 const eventUnavailable = ['cancelled', 'completed'].includes(event?.event_status)
+                const attendeeHasMainTicket = attendeeTickets.some((item) => item.attendee_type === 'participant')
+                const summaryStatus = registration.registration_status !== 'registered'
+                  ? 'Cancelled'
+                  : !isPaid || payment?.payment_status === 'approved'
+                    ? 'Approved'
+                    : payment?.payment_status === 'rejected'
+                      ? 'Rejected'
+                      : 'Pending'
                 const receiptHref = payment?.payment_status === 'approved' && payment.receipt_number
                   ? `/payments/receipt/${registration.id}/${payment.id}`
                   : ''
@@ -247,7 +276,32 @@ function MyEvents({ compact = false }) {
                     <a className="my-registration-image" href={hasPublicDetail ? `/events/${encodeURIComponent(event.slug)}` : undefined} aria-label={hasPublicDetail ? `View ${title}` : title}>
                       <img src={event?.cover_image_url || fallbackImage} alt={`${title} event`} />
                     </a>
+                    <div className="my-registration-summary">
+                      <div className="my-registration-title"><h2>{title}</h2></div>
+                      <p>{event ? `${formatEventDateTime(event.event_start)} · ${event.venue}` : 'The event is no longer visible under current event access settings.'}</p>
+                    </div>
+                    <div className="my-registration-action">
+                      <span className={`registration-summary-status is-${summaryStatus.toLowerCase()}`}>{summaryStatus}</span>
+                      {canViewRegistration
+                        ? <button className="button button-primary button-small" type="button" onClick={() => setSelectedRegistrationId(String(registration.id))}>View</button>
+                        : registration.registration_status === 'registered' && isPaid && payment?.payment_status === 'rejected' && !eventUnavailable
+                          ? <a className="button button-outline button-small" href={`/payments/${registration.id}`}>Resubmit</a>
+                          : registration.registration_status === 'registered' && isPaid && payment?.payment_status !== 'approved' && !eventUnavailable
+                            ? <a className="button button-outline button-small" href={`/payments/${registration.id}`}>Complete payment</a>
+                            : null}
+                    </div>
+                    {selectedRegistrationId === String(registration.id) && (
+                      <div className="registration-details-backdrop" onMouseDown={(mouseEvent) => {
+                        if (mouseEvent.target === mouseEvent.currentTarget) setSelectedRegistrationId('')
+                      }}>
+                        <section className="registration-details-dialog" role="dialog" aria-modal="true" aria-labelledby={`registration-dialog-title-${registration.id}`}>
+                          <header className="registration-details-header">
+                            <span id={`registration-dialog-title-${registration.id}`}>Registration details</span>
+                            <button className="registration-details-close" type="button" onClick={() => setSelectedRegistrationId('')} aria-label="Close event details">×</button>
+                          </header>
+                          <div className="registration-details-content">
                     <div className="my-registration-main">
+                      <span className="registration-label">REGISTRATION & PAYMENT</span>
                       <div className="my-registration-title"><h2>{title}</h2><StatusBadge status={registration.registration_status} />{event?.event_status === 'cancelled' && <StatusBadge status="Event Cancelled" />}</div>
                       <p>{event ? `${formatEventDateTime(event.event_start)} · ${event.venue}` : 'The event is no longer visible under current event access settings.'}</p>
                       <div className="my-registration-meta">
@@ -256,11 +310,12 @@ function MyEvents({ compact = false }) {
                         <span><small>Registered</small><strong>{formatEventDate(registration.registered_at)}</strong></span>
                       </div>
                       <div className="my-payment-status">
-                        {payment && <small>Transaction ID: {payment.transaction_id} · Submitted: {formatEventDateTime(payment.submitted_at)}</small>}
+                        {payment?.transaction_id && <small>Transaction ID: {payment.transaction_id}</small>}
+                        {payment?.submitted_at && <small>Submitted: {formatEventDateTime(payment.submitted_at)}</small>}
                         {!isPaid
                           ? <span className="status-badge status-free">Free Event / No Payment Required</span>
                           : payment?.payment_status === 'approved'
-                            ? <><span className="status-badge status-approved">Payment Approved</span>{receiptHref && <a className="text-link" href={receiptHref}>Download payment slip</a>}</>
+                            ? <><span className="status-badge status-approved">Payment Approved</span>{receiptHref && <a className="button button-primary button-small payment-slip-download" href={receiptHref}>Download payment slip</a>}</>
                             : payment?.payment_status === 'pending'
                               ? <><span className="status-badge status-pending">Payment Pending</span><a className="text-link" href={`/payments/${registration.id}`}>View payment status</a></>
                               : payment?.payment_status === 'rejected'
@@ -271,7 +326,7 @@ function MyEvents({ compact = false }) {
                                     : <><span className="status-badge status-payment-required">Payment Required</span><a className="button button-primary button-small" href={`/payments/${registration.id}`}>Submit payment</a></>
                                   : <span className="status-badge status-cancelled">Payment unavailable</span>}
                       </div>
-                      <div className="my-ticket-status">
+                      {!attendeeHasMainTicket && <div className="my-ticket-status">
                         <div>
                           <span className="registration-label">EVENT TICKET</span>
                           {ticket?.ticket_status === 'active' || ticket?.ticket_status === 'checked_in'
@@ -301,21 +356,26 @@ function MyEvents({ compact = false }) {
                             </button>
                           </div>
                         )}
-                      </div>
+                      </div>}
                       {attendeeTickets.length > 0 && (
                         <div className="my-attendee-tickets">
                           <span className="registration-label">REGISTRATION GROUP TICKETS</span>
                           <div className="my-attendee-ticket-grid">
                             {attendeeTickets.map((attendeeTicket) => (
                               <div className="my-attendee-ticket" key={attendeeTicket.ticket_id}>
-                                <strong>{attendeeTicket.attendee_name}</strong>
-                                <span>{attendeeTicket.attendee_type === 'guest'
-                                  ? `Guest — ${attendeeTicket.relationship}`
-                                  : 'Main Participant'}</span>
-                                <small>{attendeeTicket.checked_in_at ? `Checked in ${formatEventDateTime(attendeeTicket.checked_in_at)}` : 'Not checked in'}</small>
-                                <span className={`status-badge ${attendeeTicket.ticket_status === 'active' ? 'status-approved' : 'status-revoked'}`}>{attendeeTicket.ticket_status}</span>
+                                <div className="attendee-ticket-identity">
+                                  <strong>{attendeeTicket.attendee_name}</strong>
+                                  <span>{attendeeTicket.attendee_type === 'guest'
+                                    ? `Guest — ${attendeeTicket.relationship}`
+                                    : 'Main Participant'}</span>
+                                  <small>Ticket reference: {attendeeTicket.ticket_reference}</small>
+                                </div>
+                                <div className="attendee-ticket-meta">
+                                  <small>{attendeeTicket.checked_in_at ? `Checked in ${formatEventDateTime(attendeeTicket.checked_in_at)}` : 'Not checked in'}</small>
+                                  <span className={`status-badge ${attendeeTicket.ticket_status === 'active' ? 'status-approved' : 'status-revoked'}`}>{attendeeTicket.ticket_status}</span>
+                                </div>
                                 {attendeeTicket.ticket_status === 'active' && attendeeTicket.ticket_token && (
-                                  <>
+                                  <div className="attendee-ticket-actions">
                                     <TicketQrDisplay ticket={attendeeTicket} eventTitle={attendeeTicket.event_title} />
                                     <button
                                       className="button button-outline button-small"
@@ -336,7 +396,7 @@ function MyEvents({ compact = false }) {
                                     >
                                       Download ticket PDF
                                     </button>
-                                  </>
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -346,18 +406,41 @@ function MyEvents({ compact = false }) {
                       {benefits.length > 0 && (
                         <div className="my-event-benefits">
                           <span className="registration-label">MY EVENT BENEFITS</span>
-                          <div className="my-event-benefit-grid">
-                            {benefits.map((benefit) => (
-                              <div className={`my-event-benefit is-${benefit.status}`} key={benefit.item_id}>
-                                <strong>{benefit.item_name}</strong>
-                                <span>{benefit.status === 'received' ? 'Received' : 'Not Received'}</span>
+                          {Object.entries(benefitsByAttendee).map(([attendeeId, attendeeBenefits]) => (
+                            <div className="my-attendee-benefits" key={attendeeId}>
+                              <div className="attendee-benefits-heading">
+                                <div>
+                                  <strong>{attendeeBenefits[0].attendee_name}</strong>
+                                  <small>{attendeeBenefits[0].attendee_type === 'guest'
+                                    ? `Guest — ${attendeeBenefits[0].relationship}`
+                                    : 'Main Participant'}</small>
+                                </div>
+                                {attendeeBenefits[0].attendee_type === 'guest' && <span className="attendee-type-badge">Guest</span>}
                               </div>
-                            ))}
-                          </div>
+                              <div className="attendee-benefit-meta">
+                                {attendeeBenefits[0].ticket_reference && <small>Ticket reference: {attendeeBenefits[0].ticket_reference}</small>}
+                                <small>{attendeeBenefits[0].checked_in_at
+                                  ? `Checked in ${formatEventDateTime(attendeeBenefits[0].checked_in_at)}`
+                                  : 'Not checked in'}</small>
+                              </div>
+                              <div className="my-event-benefit-grid">
+                                {attendeeBenefits.map((benefit) => (
+                                  <div className={`my-event-benefit is-${benefit.status}`} key={benefit.item_id}>
+                                    <strong>{benefit.item_name}</strong>
+                                    <span className={`benefit-status is-${benefit.status}`}>{benefit.status === 'received' ? 'Received' : 'Not Received'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
-                    {hasPublicDetail && <a className="button button-outline button-small" href={`/events/${encodeURIComponent(event.slug)}`}>View event</a>}
+                            {hasPublicDetail && <a className="button button-outline button-small" href={`/events/${encodeURIComponent(event.slug)}`}>View event page</a>}
+                          </div>
+                        </section>
+                      </div>
+                    )}
                   </article>
                 )
               })}
