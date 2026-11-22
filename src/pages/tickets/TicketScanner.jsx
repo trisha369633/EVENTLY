@@ -11,7 +11,12 @@ import {
   validateAttendeeTicket,
 } from '../../services/ticketService.js'
 
-function TicketScanner({ workflow = 'distribution' }) {
+function TicketScanner({
+  workflow = 'distribution',
+  volunteerWorkspace = false,
+  distributionView = 'items',
+  onDistributionViewChange,
+}) {
   const { roles } = useAuth()
   const videoRef = useRef(null)
   const scanInFlight = useRef(false)
@@ -34,6 +39,14 @@ function TicketScanner({ workflow = 'distribution' }) {
   const [continuousSessionActive, setContinuousSessionActive] = useState(false)
   const isSuperAdmin = roles.includes('super_admin')
   const isDistributionMode = workflow === 'distribution'
+  const isVolunteerDistribution = isDistributionMode && (volunteerWorkspace || !isSuperAdmin)
+  const hasDistributionViews = isDistributionMode && volunteerWorkspace
+
+  useEffect(() => {
+    if (hasDistributionViews && continuousSessionActive) {
+      onDistributionViewChange?.('scan')
+    }
+  }, [continuousSessionActive, hasDistributionViews, onDistributionViewChange])
 
   const validateTicket = useCallback(async (value) => {
     if (!eventId) {
@@ -216,21 +229,121 @@ function TicketScanner({ workflow = 'distribution' }) {
 
   const activeEvent = events.find((event) => String(event.event_id) === eventId)
   const statusClass = result?.result_code?.toLowerCase().replace('_', '-') || ''
+  const continuousResultCards = continuousResult.map((row, index) => (
+    <article className={`continuous-result-card is-${row.item_status}`} key={`${row.item_id || 'invalid'}-${index}`}>
+      <strong>{row.item_name || 'Ticket validation'}</strong>
+      <span>
+        {row.item_status === 'distributed'
+          ? 'Successfully Distributed'
+          : row.item_status === 'already_received'
+            ? 'Already Received'
+            : row.item_status === 'invalid_ticket'
+              ? 'Invalid or ineligible ticket'
+              : row.item_status === 'unauthorized'
+                ? 'Not assigned to you'
+                : row.item_status === 'not_eligible'
+                  ? 'Not Eligible'
+                  : row.item_status === 'inventory_error'
+                    ? 'Inventory error — not distributed'
+                    : 'Not distributed'}
+      </span>
+    </article>
+  ))
+  const distributionResults = isDistributionMode && continuousResult.length > 0
+    ? isVolunteerDistribution
+      ? <details className={`distribution-result-panel volunteer-recent-distributions is-${statusClass}`} aria-live="polite">
+          <summary>
+            <span>
+              <small>LAST PARTICIPANT</small>
+              <strong>{result?.participant_name || 'Distribution result'}</strong>
+            </span>
+            <span className="volunteer-recent-result">
+              {result?.result_code?.replace('_', ' ') || 'View item results'} · {continuousResult.length} item{continuousResult.length === 1 ? '' : 's'}
+            </span>
+          </summary>
+          <div className="continuous-result-grid">{continuousResultCards}</div>
+        </details>
+      : <section className="distribution-result-panel" aria-live="polite">
+          <div className="distribution-section-heading">
+            <div>
+              <span className="eyebrow">LAST PARTICIPANT</span>
+              <h2>{result?.participant_name || 'Distribution result'}</h2>
+            </div>
+            {continuousSessionActive && <button className="button button-outline button-small" type="button" onClick={startCamera} disabled={cameraActive || checking}>Next Participant</button>}
+          </div>
+          <div className="continuous-result-grid">{continuousResultCards}</div>
+        </section>
+    : null
+  const cameraScannerPanel = (
+    <div className="ticket-camera-panel">
+      {cameraActive
+        ? <video ref={videoRef} className="ticket-camera-video" muted playsInline aria-label="Camera QR scanner" />
+        : <div className="ticket-camera-placeholder"><span aria-hidden="true">QR</span><strong>Camera scanner</strong><small>Allow camera access to scan a ticket QR code.</small></div>}
+      <button className="button button-primary" type="button" onClick={cameraActive ? stopCamera : startCamera} disabled={!eventId || checking || (isDistributionMode && !continuousSessionActive)}>
+        {cameraActive ? cameraLoading ? 'Requesting camera…' : 'Stop camera' : 'Start camera scanner'}
+      </button>
+      {cameraError && <p className="field-error" role="alert">{cameraError}</p>}
+      <small>{cameraActive && cameraLoading ? 'Waiting for camera permission…' : 'Camera scanning requires HTTPS or localhost and device permission.'}</small>
+    </div>
+  )
+  const manualTokenForm = (
+    <form className="ticket-manual-form" onSubmit={handleManualSubmit}>
+      <label className="form-field">
+        <span>Manual ticket token</span>
+        <input value={token} onChange={(event) => setToken(event.target.value)} maxLength={128} autoComplete="off" spellCheck="false" placeholder="Enter the token from the ticket QR" />
+      </label>
+      <button className="button button-outline" type="submit" disabled={!eventId || checking || (isDistributionMode && !continuousSessionActive)}>
+        {checking ? 'Checking ticket…' : 'Validate ticket'}
+      </button>
+    </form>
+  )
+  const validationResultPanel = (result || !isVolunteerDistribution) && (
+    <aside className={`ticket-validation-result${result ? ` is-${statusClass}` : ''}`} aria-live="polite">
+      {!result
+        ? <><span className="eyebrow">VALIDATION RESULT</span><h2>Ready to scan</h2><p>Select the assigned event and items before scanning a participant ticket.</p></>
+        : <>
+            <span className="ticket-result-code">{result.result_code.replace('_', ' ')}</span>
+            <h2>{result.result_code === 'VALID'
+              ? 'Ticket valid'
+              : result.result_code === 'DISTRIBUTION_COMPLETE'
+                ? 'Distribution complete'
+                : result.result_code === 'ALREADY_RECEIVED'
+                  ? 'Already received'
+                  : 'Invalid ticket'}</h2>
+            <p>{result.result_message}</p>
+            {result.event_title && <dl className="ticket-result-details">
+              <div><dt>Event</dt><dd>{result.event_title}</dd></div>
+              <div><dt>Participant</dt><dd>{result.participant_name}</dd></div>
+              <div><dt>Participant type</dt><dd className="capitalize">{result.participant_type}</dd></div>
+              {result.relationship && <div><dt>Guest relationship</dt><dd className="capitalize">{result.relationship}</dd></div>}
+              {result.main_participant_name && <div><dt>Main participant</dt><dd>{result.main_participant_name}</dd></div>}
+              {result.ticket_reference && <div><dt>Ticket reference</dt><dd>{result.ticket_reference}</dd></div>}
+            </dl>}
+          </>}
+    </aside>
+  )
   return (
-    <section className="container ticket-scanner-page">
-      <div className="ticket-scanner-heading">
-        <div>
-          <a className="back-link" href={isSuperAdmin ? '/admin/tickets' : '/volunteer'}>← {isSuperAdmin ? 'Ticket management' : 'Volunteer workspace'}</a>
-          <span className="eyebrow">{isDistributionMode ? 'ITEM DISTRIBUTION' : 'EVENT ENTRY'}</span>
-          <h1>{isDistributionMode ? 'Item distribution' : 'Ticket scanner'}</h1>
-          <p>Scan an eligible ticket to distribute only the items assigned to you. Distribution does not check the participant in.</p>
-        </div>
-        {isSuperAdmin && <a className="button button-outline" href="/admin">Admin overview</a>}
-      </div>
+    <section className={`container ticket-scanner-page${isVolunteerDistribution ? ' volunteer-distribution-scanner' : ''}`}>
+      {isVolunteerDistribution
+        ? <div className="volunteer-distribution-nav"><a className="back-link" href="/volunteer">← Volunteer workspace</a></div>
+        : <div className="ticket-scanner-heading">
+            <div>
+              <a className="back-link" href={isSuperAdmin ? '/admin/tickets' : '/volunteer'}>← {isSuperAdmin ? 'Ticket management' : 'Volunteer workspace'}</a>
+              <span className="eyebrow">{isDistributionMode ? 'ITEM DISTRIBUTION' : 'EVENT ENTRY'}</span>
+              <h1>{isDistributionMode ? 'Item distribution' : 'Ticket scanner'}</h1>
+              <p>Scan an eligible ticket to distribute only the items assigned to you. Distribution does not check the participant in.</p>
+            </div>
+            {isSuperAdmin && <a className="button button-outline" href="/admin">Admin overview</a>}
+          </div>}
 
       {error && <div className="form-feedback" role="alert">{error}</div>}
-      <div className="ticket-scanner-layout">
-        <section className="ticket-scanner-panel">
+      <div className={`ticket-scanner-layout${isVolunteerDistribution ? ` volunteer-distribution-workspace${hasDistributionViews ? ` is-view-${distributionView}` : ''}` : ''}`}>
+        <section
+          className="ticket-scanner-panel"
+          id={hasDistributionViews ? 'volunteer-distribution-select-panel' : undefined}
+          role={hasDistributionViews ? 'tabpanel' : undefined}
+          aria-labelledby={hasDistributionViews ? 'volunteer-distribution-select-tab' : undefined}
+        >
           <label className="form-field">
             <span>Event</span>
             <select value={eventId} onChange={(event) => { setEventId(event.target.value); setResult(null); setError(''); setDistributionError(''); setContinuousSessionActive(false); setSelectedItemIds([]); setContinuousResult([]) }} disabled={loadingEvents || !events.length || checking}>
@@ -278,7 +391,7 @@ function TicketScanner({ workflow = 'distribution' }) {
               {!assignedItems.length && <p className="admin-muted">No active item assignments are available for this event.</p>}
               <div className="continuous-session-actions">
                 {!continuousSessionActive
-                  ? <button className="button button-primary" type="button" disabled={!selectedItemIds.length} onClick={startContinuousSession}>Start Scanning</button>
+                  ? <button className="button button-primary" type="button" disabled={!selectedItemIds.length} onClick={startContinuousSession}>{isVolunteerDistribution ? 'Start Distribution Session' : 'Start Scanning'}</button>
                   : <>
                     <button className="button button-outline" type="button" onClick={changeSelectedItems}>Change Items</button>
                     <button className="button button-danger" type="button" onClick={endContinuousSession}>End Session</button>
@@ -287,85 +400,24 @@ function TicketScanner({ workflow = 'distribution' }) {
             </section>
           )}
 
-          <div className="ticket-camera-panel">
-            {cameraActive
-              ? <video ref={videoRef} className="ticket-camera-video" muted playsInline aria-label="Camera QR scanner" />
-              : <div className="ticket-camera-placeholder"><span aria-hidden="true">QR</span><strong>Camera scanner</strong><small>Allow camera access to scan a ticket QR code.</small></div>}
-            <button className="button button-primary" type="button" onClick={cameraActive ? stopCamera : startCamera} disabled={!eventId || checking || (isDistributionMode && !continuousSessionActive)}>
-              {cameraActive ? cameraLoading ? 'Requesting camera…' : 'Stop camera' : 'Start camera scanner'}
-            </button>
-            {cameraError && <p className="field-error" role="alert">{cameraError}</p>}
-            <small>{cameraActive && cameraLoading ? 'Waiting for camera permission…' : 'Camera scanning requires HTTPS or localhost and device permission.'}</small>
-          </div>
-
-          <form className="ticket-manual-form" onSubmit={handleManualSubmit}>
-            <label className="form-field">
-              <span>Manual ticket token</span>
-              <input value={token} onChange={(event) => setToken(event.target.value)} maxLength={128} autoComplete="off" spellCheck="false" placeholder="Enter the token from the ticket QR" />
-            </label>
-            <button className="button button-outline" type="submit" disabled={!eventId || checking || (isDistributionMode && !continuousSessionActive)}>
-              {checking ? 'Checking ticket…' : 'Validate ticket'}
-            </button>
-          </form>
+          {!isVolunteerDistribution && <>{cameraScannerPanel}{manualTokenForm}</>}
         </section>
 
-        <aside className={`ticket-validation-result${result ? ` is-${statusClass}` : ''}`} aria-live="polite">
-          {!result
-          ? <><span className="eyebrow">VALIDATION RESULT</span><h2>Ready to scan</h2><p>Select the assigned event and items before scanning a participant ticket.</p></>
-            : <>
-              <span className="ticket-result-code">{result.result_code.replace('_', ' ')}</span>
-            <h2>{result.result_code === 'VALID'
-              ? 'Ticket valid'
-              : result.result_code === 'DISTRIBUTION_COMPLETE'
-                ? 'Distribution complete'
-                : result.result_code === 'ALREADY_RECEIVED'
-                  ? 'Already received'
-                  : 'Invalid ticket'}</h2>
-              <p>{result.result_message}</p>
-              {result.event_title && <dl className="ticket-result-details">
-                <div><dt>Event</dt><dd>{result.event_title}</dd></div>
-                <div><dt>Participant</dt><dd>{result.participant_name}</dd></div>
-                <div><dt>Participant type</dt><dd className="capitalize">{result.participant_type}</dd></div>
-                {result.relationship && <div><dt>Guest relationship</dt><dd className="capitalize">{result.relationship}</dd></div>}
-                {result.main_participant_name && <div><dt>Main participant</dt><dd>{result.main_participant_name}</dd></div>}
-                {result.ticket_reference && <div><dt>Ticket reference</dt><dd>{result.ticket_reference}</dd></div>}
-              </dl>}
-            </>}
-        </aside>
+        {isVolunteerDistribution && <section
+          className="volunteer-distribution-scan-column"
+          id={hasDistributionViews ? 'volunteer-distribution-scan-panel' : undefined}
+          role={hasDistributionViews ? 'tabpanel' : undefined}
+          aria-labelledby={hasDistributionViews ? 'volunteer-distribution-scan-tab' : undefined}
+        >
+          {cameraScannerPanel}
+          {manualTokenForm}
+          {validationResultPanel}
+          {distributionResults}
+        </section>}
+
+        {!isVolunteerDistribution && validationResultPanel}
       </div>
-      {isDistributionMode && continuousResult.length > 0 && (
-        <section className="distribution-result-panel" aria-live="polite">
-          <div className="distribution-section-heading">
-            <div>
-              <span className="eyebrow">LAST PARTICIPANT</span>
-              <h2>{result?.participant_name || 'Distribution result'}</h2>
-            </div>
-            {continuousSessionActive && <button className="button button-outline button-small" type="button" onClick={startCamera} disabled={cameraActive || checking}>Next Participant</button>}
-          </div>
-          <div className="continuous-result-grid">
-            {continuousResult.map((row, index) => (
-              <article className={`continuous-result-card is-${row.item_status}`} key={`${row.item_id || 'invalid'}-${index}`}>
-                <strong>{row.item_name || 'Ticket validation'}</strong>
-                <span>
-                  {row.item_status === 'distributed'
-                    ? 'Successfully Distributed'
-                    : row.item_status === 'already_received'
-                      ? 'Already Received'
-                      : row.item_status === 'invalid_ticket'
-                        ? 'Invalid or ineligible ticket'
-                        : row.item_status === 'unauthorized'
-                          ? 'Not assigned to you'
-                          : row.item_status === 'not_eligible'
-                            ? 'Not Eligible'
-                          : row.item_status === 'inventory_error'
-                            ? 'Inventory error — not distributed'
-                            : 'Not distributed'}
-                </span>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+      {!isVolunteerDistribution && distributionResults}
       {!loadingEvents && events.length === 0 && <div className="empty-state"><h2>No events assigned</h2><p>Ticket scanning is limited to event assignments. Ask a Super Admin to assign you to an event.</p></div>}
     </section>
   )

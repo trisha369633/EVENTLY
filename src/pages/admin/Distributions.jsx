@@ -391,7 +391,7 @@ function Distributions() {
           <label className="form-field"><span>Distribution ends</span><input type="datetime-local" value={form.endsAt} onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))} /></label>
           <label className="form-field"><span>Location</span><input value={form.location} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} maxLength={240} placeholder="Optional pickup location" /></label>
           <label className="distribution-toggle"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))} /><span>Item is active for distribution</span></label>
-          <label className="distribution-toggle"><input type="checkbox" checked={form.guestEligible} onChange={(event) => setForm((current) => ({ ...current, guestEligible: event.target.checked }))} /><span>Guests are eligible to receive this item</span></label>
+          <label className="distribution-toggle"><input type="checkbox" checked={form.guestEligible} onChange={(event) => setForm((current) => ({ ...current, guestEligible: event.target.checked }))} /><span>Eligible for Guests</span></label>
           <div className="distribution-form-actions"><button className="button button-primary" type="submit" disabled={formBusy || !events.length}>{formBusy ? 'Saving…' : form.id ? 'Save changes' : 'Create item'}</button></div>
         </form>
       </section>

@@ -61,6 +61,24 @@ function TicketQrDisplay({ ticket, eventTitle }) {
   )
 }
 
+function getBenefitItemId(benefit) {
+  return String(benefit.distribution_item_id ?? benefit.item_id ?? '')
+}
+
+function isBenefitReceived(benefit) {
+  return String(benefit.status || '').toLowerCase() === 'received'
+    || Number(benefit.quantity_received) > 0
+}
+
+function getBenefitDisplayStatus(benefits) {
+  if (benefits.some(isBenefitReceived)) return 'received'
+  if (benefits.some((benefit) => (
+    String(benefit.status || '').toLowerCase() === 'not_applicable'
+    || (benefit.attendee_type === 'guest' && benefit.guest_eligible === false)
+  ))) return 'not_applicable'
+  return 'not_received'
+}
+
 function MyEvents({ compact = false }) {
   const [registrations, setRegistrations] = useState([])
   const [eventsByRegistration, setEventsByRegistration] = useState({})
@@ -330,7 +348,7 @@ function MyEvents({ compact = false }) {
                         <div>
                           <span className="registration-label">EVENT TICKET</span>
                           {ticket?.ticket_status === 'active' || ticket?.ticket_status === 'checked_in'
-                            ? <><strong>{ticket.ticket_status === 'checked_in' ? 'Checked in' : 'Ticket ready'}</strong><small>Reference: {ticket.ticket_reference}</small></>
+                            ? <><strong>Ticket ready</strong><small>Reference: {ticket.ticket_reference}</small></>
                             : ticket?.ticket_status === 'revoked'
                               ? <><strong>Ticket revoked</strong><small>Contact the event organizer if you believe this is incorrect.</small></>
                               : ticket?.ticket_status === 'not_eligible' || registration.registration_status !== 'registered'
@@ -371,8 +389,9 @@ function MyEvents({ compact = false }) {
                                   <small>Ticket reference: {attendeeTicket.ticket_reference}</small>
                                 </div>
                                 <div className="attendee-ticket-meta">
-                                  <small>{attendeeTicket.checked_in_at ? `Checked in ${formatEventDateTime(attendeeTicket.checked_in_at)}` : 'Not checked in'}</small>
-                                  <span className={`status-badge ${attendeeTicket.ticket_status === 'active' ? 'status-approved' : 'status-revoked'}`}>{attendeeTicket.ticket_status}</span>
+                                  <span className={`status-badge ${attendeeTicket.ticket_status === 'revoked' ? 'status-revoked' : 'status-approved'}`}>
+                                    {attendeeTicket.ticket_status === 'revoked' ? 'revoked' : 'active'}
+                                  </span>
                                 </div>
                                 {attendeeTicket.ticket_status === 'active' && attendeeTicket.ticket_token && (
                                   <div className="attendee-ticket-actions">
@@ -419,17 +438,27 @@ function MyEvents({ compact = false }) {
                               </div>
                               <div className="attendee-benefit-meta">
                                 {attendeeBenefits[0].ticket_reference && <small>Ticket reference: {attendeeBenefits[0].ticket_reference}</small>}
-                                <small>{attendeeBenefits[0].checked_in_at
-                                  ? `Checked in ${formatEventDateTime(attendeeBenefits[0].checked_in_at)}`
-                                  : 'Not checked in'}</small>
                               </div>
                               <div className="my-event-benefit-grid">
-                                {attendeeBenefits.map((benefit) => (
-                                  <div className={`my-event-benefit is-${benefit.status}`} key={benefit.item_id}>
-                                    <strong>{benefit.item_name}</strong>
-                                    <span className={`benefit-status is-${benefit.status}`}>{benefit.status === 'received' ? 'Received' : 'Not Received'}</span>
-                                  </div>
-                                ))}
+                                {[...new Map(attendeeBenefits.map((benefit) => [
+                                  getBenefitItemId(benefit),
+                                  benefit,
+                                ])).values()].map((benefit) => {
+                                  const itemId = getBenefitItemId(benefit)
+                                  const matchingBenefits = benefits.filter((row) => (
+                                    String(row.attendee_id || row.attendee_type || 'participant') === attendeeId
+                                    && getBenefitItemId(row) === itemId
+                                  ))
+                                  const status = getBenefitDisplayStatus(matchingBenefits)
+                                  return (
+                                    <div className={`my-event-benefit is-${status}`} key={itemId}>
+                                      <strong>{benefit.item_name}</strong>
+                                      <span className={`benefit-status is-${status}`}>
+                                        {status === 'received' ? 'Received' : status === 'not_applicable' ? 'Not Applicable' : 'Not Received'}
+                                      </span>
+                                    </div>
+                                  )
+                                })}
                               </div>
                             </div>
                           ))}

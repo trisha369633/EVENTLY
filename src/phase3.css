@@ -2928,6 +2928,435 @@
   }
 }
 
+.volunteer-distribution-scanner {
+  --volunteer-deep-green: #123d2e;
+  --volunteer-green: #1d5b41;
+  --volunteer-cream: #f5f2e8;
+  --volunteer-paper: #fffdf7;
+  padding-block: 0 34px;
+}
+
+.volunteer-distribution-layout .admin-layout-content {
+  padding-top: 0;
+}
+
+.volunteer-distribution-segments {
+  display: grid;
+  gap: 5px;
+}
+
+.admin-sidebar .volunteer-distribution-segments button {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.admin-sidebar .volunteer-distribution-segments button:hover {
+  background: rgb(255 255 255 / 10%);
+}
+
+.admin-sidebar .volunteer-distribution-segments button.active {
+  border-color: rgb(255 255 255 / 12%);
+  background: #1b6348;
+  color: #fff;
+  font-weight: 650;
+}
+
+.volunteer-distribution-segments button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.volunteer-distribution-scanner .ticket-scanner-heading {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border: 0;
+}
+
+.volunteer-distribution-nav {
+  margin-bottom: 12px;
+}
+
+.volunteer-distribution-nav .back-link {
+  display: inline-flex;
+  margin: 0;
+  color: var(--volunteer-green);
+  font-size: 12px;
+}
+
+.volunteer-distribution-scanner .ticket-scanner-heading .back-link {
+  margin-bottom: 10px;
+}
+
+.volunteer-distribution-scanner .ticket-scanner-layout {
+  grid-template-columns: minmax(0, 0.9fr) minmax(300px, 1.1fr);
+  gap: 12px;
+}
+
+.volunteer-distribution-scan-column {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.volunteer-distribution-scanner .ticket-scanner-panel,
+.volunteer-distribution-scanner .ticket-validation-result,
+.volunteer-distribution-scanner .continuous-item-selection,
+.volunteer-distribution-scanner .ticket-camera-panel {
+  border: 0;
+  border-radius: 14px;
+  background: var(--volunteer-cream);
+  box-shadow: none;
+}
+
+.volunteer-distribution-scanner .ticket-scanner-panel {
+  gap: 12px;
+  padding: 16px;
+}
+
+.volunteer-distribution-scanner .ticket-scanner-panel > .form-field select {
+  background: var(--volunteer-paper);
+}
+
+.volunteer-distribution-scanner .ticket-scanner-event {
+  border: 0;
+  border-radius: 10px;
+  background: var(--volunteer-deep-green);
+  color: #fff;
+}
+
+.volunteer-distribution-scanner .ticket-scanner-event strong,
+.volunteer-distribution-scanner .ticket-scanner-event span {
+  color: #fff;
+}
+
+.volunteer-distribution-scanner .continuous-item-selection {
+  gap: 10px;
+  padding: 14px;
+}
+
+.volunteer-distribution-scanner .continuous-section-heading .eyebrow {
+  color: var(--volunteer-green);
+}
+
+.volunteer-distribution-scanner .continuous-section-heading > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.volunteer-distribution-scanner .continuous-session-active {
+  background: #dce9dd;
+  color: var(--volunteer-deep-green);
+}
+
+.volunteer-distribution-scanner .continuous-item-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.volunteer-distribution-scanner .continuous-item-card {
+  display: flex;
+  min-height: 76px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 12px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--volunteer-paper);
+  color: var(--volunteer-deep-green);
+}
+
+.volunteer-distribution-scanner .continuous-item-card strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.volunteer-distribution-scanner .continuous-item-card span {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--volunteer-cream);
+  color: var(--volunteer-green);
+  line-height: 1.2;
+}
+
+.volunteer-distribution-scanner .continuous-item-card.is-selected {
+  background: var(--volunteer-deep-green);
+  color: #fff;
+  box-shadow: none;
+}
+
+.volunteer-distribution-scanner .continuous-item-card.is-selected span {
+  background: #e2ece1;
+  color: var(--volunteer-deep-green);
+}
+
+.volunteer-distribution-scanner .continuous-session-actions {
+  gap: 8px;
+}
+
+.volunteer-distribution-scanner .continuous-session-actions .button-primary {
+  border: 0;
+  background: var(--volunteer-deep-green);
+}
+
+.volunteer-distribution-scanner .ticket-camera-panel {
+  gap: 10px;
+  padding: 12px;
+}
+
+.volunteer-distribution-scanner .ticket-camera-placeholder {
+  min-height: 170px;
+  border-radius: 11px;
+  background: var(--volunteer-deep-green);
+}
+
+.volunteer-distribution-scanner .ticket-camera-video {
+  max-height: 300px;
+  border-radius: 11px;
+}
+
+.volunteer-distribution-scanner .ticket-manual-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--volunteer-cream);
+}
+
+.volunteer-distribution-scanner .ticket-validation-result {
+  min-height: 0;
+  padding: 18px;
+  background: var(--volunteer-cream);
+}
+
+.volunteer-distribution-workspace.is-view-items > .ticket-scanner-panel {
+  grid-column: 1 / -1;
+}
+
+.volunteer-distribution-workspace.is-view-items > .volunteer-distribution-scan-column {
+  display: none;
+}
+
+.volunteer-distribution-workspace.is-view-scan > .ticket-scanner-panel {
+  display: none;
+}
+
+.volunteer-distribution-workspace.is-view-scan > .volunteer-distribution-scan-column {
+  grid-column: 1 / -1;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result h2 {
+  color: var(--volunteer-deep-green);
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-distribution-complete {
+  background: #e6f0e6;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-already-received {
+  background: #f4eddb;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-invalid-ticket {
+  background: #f5e6e2;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-distribution-complete .ticket-result-code {
+  background: #d2e5d4;
+  color: var(--volunteer-deep-green);
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-already-received .ticket-result-code {
+  background: #eadbb8;
+  color: #704d17;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-invalid-ticket .ticket-result-code {
+  background: #edd2cd;
+  color: #8d352d;
+}
+
+.volunteer-distribution-scanner .distribution-result-panel {
+  gap: 0;
+  margin-top: 12px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: var(--volunteer-cream);
+}
+
+.volunteer-distribution-scanner .volunteer-recent-distributions > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 15px;
+  color: var(--volunteer-deep-green);
+  cursor: pointer;
+  list-style: none;
+}
+
+.volunteer-distribution-scanner .volunteer-recent-distributions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.volunteer-distribution-scanner .volunteer-recent-distributions > summary > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.volunteer-distribution-scanner .volunteer-recent-distributions > summary small {
+  color: var(--volunteer-green);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.volunteer-distribution-scanner .volunteer-recent-distributions > summary strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.volunteer-distribution-scanner .volunteer-recent-result {
+  flex: 0 0 auto;
+  color: var(--volunteer-green);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.volunteer-distribution-scanner .volunteer-recent-distributions > .continuous-result-grid {
+  padding: 0 12px 12px;
+}
+
+.volunteer-distribution-scanner .continuous-result-card {
+  border: 0;
+  background: var(--volunteer-paper);
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-distributed {
+  background: #e2efe3;
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-already_received {
+  background: #f1e7cf;
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-not_eligible,
+.volunteer-distribution-scanner .continuous-result-card.is-invalid_ticket,
+.volunteer-distribution-scanner .continuous-result-card.is-unauthorized,
+.volunteer-distribution-scanner .continuous-result-card.is-inventory_error {
+  background: #f3e5e1;
+}
+
+@media (max-width: 900px) {
+  .volunteer-distribution-scanner .ticket-scanner-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .volunteer-distribution-segments {
+    display: grid;
+    flex: 1 0 100%;
+    width: 100%;
+  }
+
+  .admin-sidebar .volunteer-distribution-segments button {
+    min-height: 36px;
+    width: 100%;
+    justify-content: flex-start;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .volunteer-distribution-scanner {
+    padding-block: 0 24px;
+  }
+
+  .volunteer-distribution-layout .admin-layout-content {
+    padding-top: 0;
+  }
+
+  .volunteer-distribution-scanner .ticket-scanner-heading {
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+
+  .volunteer-distribution-scanner .ticket-scanner-heading .back-link {
+    margin-bottom: 6px;
+  }
+
+  .volunteer-distribution-scanner .ticket-scanner-layout {
+    gap: 10px;
+  }
+
+  .volunteer-distribution-scanner .ticket-scanner-panel {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .volunteer-distribution-scanner .continuous-item-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .volunteer-distribution-scanner .continuous-item-card {
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  .volunteer-distribution-scanner .ticket-camera-placeholder {
+    min-height: 132px;
+  }
+
+  .volunteer-distribution-scanner .ticket-camera-video {
+    max-height: 220px;
+  }
+
+  .volunteer-distribution-scanner .ticket-manual-form {
+    grid-template-columns: 1fr;
+  }
+
+  .volunteer-distribution-scanner .ticket-manual-form > .button {
+    width: 100%;
+  }
+
+  .volunteer-distribution-scanner .ticket-validation-result {
+    padding: 14px;
+  }
+
+  .volunteer-distribution-scanner .volunteer-recent-distributions > summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .volunteer-distribution-scanner .volunteer-recent-result {
+    text-align: left;
+  }
+}
+
 .guest-registration-list,
 .guest-registration-row,
 .my-attendee-tickets,
