@@ -16,6 +16,12 @@ const participantTypes = ['student', 'teacher', 'alumni']
 
 function registrationErrorMessage(error) {
   const message = String(error?.message || '').toLowerCase()
+  if (error?.registrationStage === 'payment_proof_upload') {
+    return `Payment screenshot upload failed: ${error.message || 'storage permissions rejected the upload.'}`
+  }
+  if (message.includes('participant role is required')) {
+    return 'A participant role is required to register for this event.'
+  }
   if (error?.code === '23505' || message.includes('unique_event_user') || message.includes('duplicate key')) {
     return 'You already have a registration for this event.'
   }
@@ -28,8 +34,8 @@ function registrationErrorMessage(error) {
   if (message.includes('status') || message.includes('published')) {
     return 'This event is no longer accepting registrations.'
   }
-  if (error?.code === '42501' || message.includes('row-level security')) {
-    return 'Your account is not permitted to register for this event. Please contact the platform administrator.'
+  if (error?.code === '42501' || message.includes('row-level security') || message.includes('permission denied')) {
+    return 'Supabase denied a database permission during registration. This does not by itself mean your account lacks the participant role; please contact the platform administrator with this error.'
   }
   if (error?.code === '23503' || error?.code === '23514') {
     return 'Some registration details are no longer valid. Review your institution, department, and participant type.'

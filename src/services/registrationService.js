@@ -121,7 +121,12 @@ export async function completeEventRegistration(registrationData) {
       contentType: file.type,
       upsert: false,
     })
-    if (uploadError) throw uploadError
+    if (uploadError) {
+      const error = new Error(uploadError.message, { cause: uploadError })
+      error.code = uploadError.code
+      error.registrationStage = 'payment_proof_upload'
+      throw error
+    }
   }
 
   const { data, error } = await client.rpc('complete_event_registration_with_payment', {

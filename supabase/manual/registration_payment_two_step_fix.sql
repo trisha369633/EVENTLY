@@ -46,8 +46,8 @@ returns table (
   full_name text
 )
 language plpgsql
-security invoker
-set search_path = public
+security definer
+set search_path = ''
 as $function$
 declare
   v_user uuid := auth.uid();
@@ -65,11 +65,20 @@ declare
   v_guest_name text;
   v_relationship text;
   v_age_category text;
-  v_guest_fee numeric(12,2);
   v_existing_payment_count integer;
 begin
   if v_user is null then
     raise exception 'Sign in to continue.';
+  end if;
+  if not exists (
+    select 1
+    from public.user_roles role_row
+    where role_row.user_id = v_user
+      and role_row.role = 'participant'
+  ) then
+    raise exception using
+      errcode = '42501',
+      message = 'A participant role is required to register for this event.';
   end if;
   if p_full_name is null or btrim(p_full_name) = '' then
     raise exception 'Full name is required.';
