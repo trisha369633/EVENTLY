@@ -7,13 +7,11 @@ import {
   recordContinuousAttendeeDistribution,
 } from '../../services/distributionService.js'
 import {
-  checkInAttendeeTicket,
-  checkInEventTicket,
   getTicketScannerEvents,
   validateAttendeeTicket,
 } from '../../services/ticketService.js'
 
-function TicketScanner({ workflow = 'entry' }) {
+function TicketScanner({ workflow = 'distribution' }) {
   const { roles } = useAuth()
   const videoRef = useRef(null)
   const scanInFlight = useRef(false)
@@ -48,61 +46,40 @@ function TicketScanner({ workflow = 'entry' }) {
     setDistributionSuccess('')
     setResult(null)
     try {
-      if (isDistributionMode) {
-        const privateToken = String(value || '').trim()
-        if (!continuousSessionActive || selectedItemIds.length === 0) {
-          throw new Error('Select assigned items and start scanning before scanning a participant.')
-        }
-        setContinuousResult([])
-        const resolvedTicket = await validateAttendeeTicket({ eventId, token: privateToken })
-        const rows = await recordContinuousAttendeeDistribution({
-          eventId,
-          token: privateToken,
-          itemIds: selectedItemIds,
-        })
-        setToken('')
-        const firstItem = rows.find((row) => row.attendee_name)
-        const invalid = rows.every((row) => row.item_status === 'invalid_ticket')
-        setResult({
-          result_code: invalid ? 'INVALID_TICKET' : rows.some((row) => row.item_status === 'distributed') ? 'DISTRIBUTION_COMPLETE' : 'ALREADY_RECEIVED',
-          result_message: invalid
-            ? 'This ticket is invalid, revoked, cancelled, or not eligible.'
-            : 'Selected item statuses were confirmed by the database.',
-          event_title: firstItem?.event_title || events.find((event) => String(event.event_id) === eventId)?.event_title,
-          participant_name: firstItem?.attendee_name || 'Unknown attendee',
-          participant_type: firstItem?.attendee_type,
-          relationship: firstItem?.relationship,
-          main_participant_name: firstItem?.main_participant_name,
-          ticket_reference: resolvedTicket?.ticket_reference,
-        })
-        setContinuousResult(rows)
-        setDistributionError('')
-        return
+      const privateToken = String(value || '').trim()
+      if (!continuousSessionActive || selectedItemIds.length === 0) {
+        throw new Error('Select assigned items and start scanning before scanning a participant.')
       }
-
-      try {
-        const attendeeResult = await checkInAttendeeTicket({ eventId, token: value })
-        setResult(attendeeResult ? {
-          result_code: attendeeResult.result_code,
-          result_message: attendeeResult.result_message,
-          event_title: attendeeResult.event_title,
-          participant_name: attendeeResult.attendee_name,
-          participant_type: attendeeResult.attendee_type,
-          relationship: attendeeResult.relationship,
-          main_participant_name: attendeeResult.main_participant_name,
-          ticket_reference: attendeeResult.ticket_reference,
-          checked_in_at: attendeeResult.checked_in_at,
-        } : await checkInEventTicket({ eventId, token: value }))
-      } catch {
-        setResult(await checkInEventTicket({ eventId, token: value }))
-      }
+      setContinuousResult([])
+      const resolvedTicket = await validateAttendeeTicket({ eventId, token: privateToken })
+      const rows = await recordContinuousAttendeeDistribution({
+        eventId,
+        token: privateToken,
+        itemIds: selectedItemIds,
+      })
       setToken('')
+      const firstItem = rows.find((row) => row.attendee_name)
+      const invalid = rows.every((row) => row.item_status === 'invalid_ticket')
+      setResult({
+        result_code: invalid ? 'INVALID_TICKET' : rows.some((row) => row.item_status === 'distributed') ? 'DISTRIBUTION_COMPLETE' : 'ALREADY_RECEIVED',
+        result_message: invalid
+          ? 'This ticket is invalid, revoked, cancelled, or not eligible.'
+          : 'Selected item statuses were confirmed by the database.',
+        event_title: firstItem?.event_title || events.find((event) => String(event.event_id) === eventId)?.event_title,
+        participant_name: firstItem?.attendee_name || 'Unknown attendee',
+        participant_type: firstItem?.attendee_type,
+        relationship: firstItem?.relationship,
+        main_participant_name: firstItem?.main_participant_name,
+        ticket_reference: resolvedTicket?.ticket_reference,
+      })
+      setContinuousResult(rows)
+      setDistributionError('')
     } catch (validationError) {
       setError(validationError.message || 'The ticket could not be validated.')
     } finally {
       setChecking(false)
     }
-  }, [eventId, events, isDistributionMode, continuousSessionActive, selectedItemIds])
+  }, [eventId, events, continuousSessionActive, selectedItemIds])
 
   useEffect(() => {
     let active = true
@@ -246,9 +223,7 @@ function TicketScanner({ workflow = 'entry' }) {
           <a className="back-link" href={isSuperAdmin ? '/admin/tickets' : '/volunteer'}>← {isSuperAdmin ? 'Ticket management' : 'Volunteer workspace'}</a>
           <span className="eyebrow">{isDistributionMode ? 'ITEM DISTRIBUTION' : 'EVENT ENTRY'}</span>
           <h1>{isDistributionMode ? 'Item distribution' : 'Ticket scanner'}</h1>
-          <p>{isDistributionMode
-            ? 'Scan an eligible ticket to review only the items assigned to you. Distribution does not check the participant in.'
-            : 'Scan a ticket to run the existing Phase 5 validation and check-in. Item distribution is handled separately.'}</p>
+          <p>Scan an eligible ticket to distribute only the items assigned to you. Distribution does not check the participant in.</p>
         </div>
         {isSuperAdmin && <a className="button button-outline" href="/admin">Admin overview</a>}
       </div>
@@ -336,20 +311,16 @@ function TicketScanner({ workflow = 'entry' }) {
 
         <aside className={`ticket-validation-result${result ? ` is-${statusClass}` : ''}`} aria-live="polite">
           {!result
-          ? <><span className="eyebrow">VALIDATION RESULT</span><h2>Ready to scan</h2><p>{isDistributionMode ? 'Select the assigned event before checking distribution eligibility.' : 'Select the correct event before checking in a participant.'}</p></>
+          ? <><span className="eyebrow">VALIDATION RESULT</span><h2>Ready to scan</h2><p>Select the assigned event and items before scanning a participant ticket.</p></>
             : <>
               <span className="ticket-result-code">{result.result_code.replace('_', ' ')}</span>
             <h2>{result.result_code === 'VALID'
-              ? 'Entry accepted'
-              : result.result_code === 'ALREADY_USED'
-                ? 'Already checked in'
-                : result.result_code === 'DISTRIBUTION_READY'
-                  ? 'Eligible for distribution'
-                  : result.result_code === 'NO_ITEMS'
-                    ? 'No items assigned'
-                    : result.result_code === 'NOT_ELIGIBLE'
-                      ? 'Not eligible'
-                      : 'Invalid ticket'}</h2>
+              ? 'Ticket valid'
+              : result.result_code === 'DISTRIBUTION_COMPLETE'
+                ? 'Distribution complete'
+                : result.result_code === 'ALREADY_RECEIVED'
+                  ? 'Already received'
+                  : 'Invalid ticket'}</h2>
               <p>{result.result_message}</p>
               {result.event_title && <dl className="ticket-result-details">
                 <div><dt>Event</dt><dd>{result.event_title}</dd></div>
@@ -358,8 +329,6 @@ function TicketScanner({ workflow = 'entry' }) {
                 {result.relationship && <div><dt>Guest relationship</dt><dd className="capitalize">{result.relationship}</dd></div>}
                 {result.main_participant_name && <div><dt>Main participant</dt><dd>{result.main_participant_name}</dd></div>}
                 {result.ticket_reference && <div><dt>Ticket reference</dt><dd>{result.ticket_reference}</dd></div>}
-                {result.checked_in_at && <div><dt>Checked in</dt><dd>{formatEventDateTime(result.checked_in_at)}</dd></div>}
-                {result.checked_in_by_name && <div><dt>Checked in by</dt><dd>{result.checked_in_by_name}</dd></div>}
               </dl>}
             </>}
         </aside>

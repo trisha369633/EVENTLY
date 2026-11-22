@@ -12,7 +12,35 @@ import { listDepartments, listInstitutions } from '../../services/profileService
 
 const modes = ['offline', 'online', 'hybrid']
 const fieldTypes = ['text', 'number', 'email', 'phone', 'dropdown', 'radio', 'textarea', 'checkbox']
-const guestRelationships = ['father', 'mother', 'sister', 'brother', 'husband', 'wife', 'child']
+const createEventDraftStorageKey = 'evently:/admin/events/create:draft'
+
+function readCreateEventDraft() {
+  try {
+    const storedDraft = window.sessionStorage.getItem(createEventDraftStorageKey)
+    if (!storedDraft) return null
+    const draft = JSON.parse(storedDraft)
+    return draft && typeof draft === 'object' ? draft : null
+  } catch (error) {
+    console.error('The create-event draft could not be restored.', error)
+    return null
+  }
+}
+
+function saveCreateEventDraft(draft) {
+  try {
+    window.sessionStorage.setItem(createEventDraftStorageKey, JSON.stringify(draft))
+  } catch (error) {
+    console.error('The create-event draft could not be saved.', error)
+  }
+}
+
+function clearCreateEventDraft() {
+  try {
+    window.sessionStorage.removeItem(createEventDraftStorageKey)
+  } catch (error) {
+    console.error('The create-event draft could not be cleared.', error)
+  }
+}
 
 function toLocalDateTime(value) {
   if (!value) return ''
@@ -73,28 +101,60 @@ function initialCustomFields(event) {
 function EventForm({ event = null, onSaved }) {
   const { user } = useAuth()
   const statuses = event ? ['draft', 'published', 'cancelled', 'completed'] : ['draft', 'published']
-  const [values, setValues] = useState(() => initialValues(event))
-  const [customFields, setCustomFields] = useState(() => initialCustomFields(event))
+  const [savedDraft] = useState(() => event ? null : readCreateEventDraft())
+  const [values, setValues] = useState(() => ({ ...initialValues(event), ...savedDraft?.values }))
+  const [customFields, setCustomFields] = useState(() => (
+    Array.isArray(savedDraft?.customFields) ? savedDraft.customFields : initialCustomFields(event)
+  ))
   const [institutions, setInstitutions] = useState([])
   const [departments, setDepartments] = useState([])
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState('')
-  const [slugTouched, setSlugTouched] = useState(Boolean(event?.slug))
-  const [guestEnabled, setGuestEnabled] = useState(false)
-  const [maxGuests, setMaxGuests] = useState('0')
-  const [totalGuestLimit, setTotalGuestLimit] = useState('0')
-  const [guestDistributionEnabled, setGuestDistributionEnabled] = useState(true)
-  const [guestFees, setGuestFees] = useState(
-    Object.fromEntries(guestRelationships.map((relationship) => [relationship, '0'])),
-  )
+  const [slugTouched, setSlugTouched] = useState(savedDraft?.slugTouched ?? Boolean(event?.slug))
+  const [guestEnabled, setGuestEnabled] = useState(savedDraft?.guestEnabled ?? false)
+  const [maxGuests, setMaxGuests] = useState(savedDraft?.maxGuests ?? '0')
+  const [totalGuestLimit, setTotalGuestLimit] = useState(savedDraft?.totalGuestLimit ?? '0')
+  const [guestDistributionEnabled, setGuestDistributionEnabled] = useState(savedDraft?.guestDistributionEnabled ?? true)
+  const [commonGuestFee, setCommonGuestFee] = useState(savedDraft?.commonGuestFee ?? '0')
+  const [childUnder6Fee, setChildUnder6Fee] = useState(savedDraft?.childUnder6Fee ?? '0')
+  const [childAbove6Fee, setChildAbove6Fee] = useState(savedDraft?.childAbove6Fee ?? '0')
+  const initialInstitutionId = event?.institution_id || savedDraft?.values?.institution_id || ''
+
+  useEffect(() => {
+    if (event) return
+    saveCreateEventDraft({
+      values,
+      customFields,
+      slugTouched,
+      guestEnabled,
+      maxGuests,
+      totalGuestLimit,
+      guestDistributionEnabled,
+      commonGuestFee,
+      childUnder6Fee,
+      childAbove6Fee,
+    })
+  }, [
+    event,
+    values,
+    customFields,
+    slugTouched,
+    guestEnabled,
+    maxGuests,
+    totalGuestLimit,
+    guestDistributionEnabled,
+    commonGuestFee,
+    childUnder6Fee,
+    childAbove6Fee,
+  ])
 
   useEffect(() => {
     let active = true
     Promise.all([
       listInstitutions(),
-      event?.institution_id ? listDepartments(event.institution_id) : Promise.resolve([]),
+      initialInstitutionId ? listDepartments(initialInstitutionId) : Promise.resolve([]),
     ])
       .then(([nextInstitutions, nextDepartments]) => {
         if (!active) return
@@ -111,7 +171,7 @@ function EventForm({ event = null, onSaved }) {
     return () => {
       active = false
     }
-  }, [event?.institution_id])
+  }, [event?.institution_id, initialInstitutionId])
 
   useEffect(() => {
     if (!event?.id) return undefined
@@ -125,13 +185,9 @@ function EventForm({ event = null, onSaved }) {
         setMaxGuests(String(first.max_guests_per_participant))
         setTotalGuestLimit(String(first.total_guest_limit))
         setGuestDistributionEnabled(Boolean(first.guest_distribution_enabled))
-        setGuestFees((current) => {
-          const next = { ...current }
-          rows.forEach((row) => {
-            if (row.relationship) next[row.relationship] = String(row.guest_fee)
-          })
-          return next
-        })
+        setCommonGuestFee(String(first?.common_guest_fee ?? rows.find((row) => row.relationship && row.relationship !== 'child')?.guest_fee ?? 0))
+        setChildUnder6Fee(String(first?.child_under_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0))
+        setChildAbove6Fee(String(first?.child_above_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0))
       })
       .catch((error) => setFormError(error.message || 'Guest settings could not be loaded.'))
     return () => {
@@ -202,11 +258,15 @@ function EventForm({ event = null, onSaved }) {
     if (!Number.isInteger(Number(totalGuestLimit)) || Number(totalGuestLimit) < 0) {
       nextErrors.totalGuestLimit = 'Enter a guest capacity of zero or more.'
     }
-    guestRelationships.forEach((relationship) => {
-      if (!Number.isFinite(Number(guestFees[relationship])) || Number(guestFees[relationship]) < 0) {
-        nextErrors[`guest_${relationship}`] = 'Enter a guest fee of zero or more.'
+    for (const [key, value] of [
+      ['commonGuestFee', commonGuestFee],
+      ['childUnder6Fee', childUnder6Fee],
+      ['childAbove6Fee', childAbove6Fee],
+    ]) {
+      if (!Number.isFinite(Number(value)) || Number(value) < 0) {
+        nextErrors[key] = 'Enter a guest fee of zero or more.'
       }
-    })
+    }
     if (values.seat_limit !== '' && (!Number.isInteger(Number(values.seat_limit)) || Number(values.seat_limit) <= 0)) {
       nextErrors.seat_limit = 'Enter a positive whole number.'
     }
@@ -282,12 +342,13 @@ function EventForm({ event = null, onSaved }) {
         maxGuestsPerParticipant: Number(maxGuests),
         totalGuestLimit: Number(totalGuestLimit),
         guestDistributionEnabled,
-        relationshipFees: guestRelationships.map((relationship) => ({
-          relationship,
-          guest_fee: Number(guestFees[relationship]),
-          is_active: guestEnabled,
-        })),
+        relationshipFees: [
+          { relationship: 'common', guest_fee: Number(commonGuestFee), is_active: guestEnabled },
+          { relationship: 'child_under_6', guest_fee: Number(childUnder6Fee), is_active: guestEnabled },
+          { relationship: 'child_above_6', guest_fee: Number(childAbove6Fee), is_active: guestEnabled },
+        ],
       })
+      if (!event) clearCreateEventDraft()
       onSaved(saved)
     } catch (error) {
       setFormError(errorMessage(error))
@@ -349,13 +410,21 @@ function EventForm({ event = null, onSaved }) {
               <label className="check-option"><input type="checkbox" checked={guestDistributionEnabled} onChange={(changeEvent) => setGuestDistributionEnabled(changeEvent.target.checked)} /><span>Allow eligible guests to receive assigned distribution items</span></label>
             </div>
             <div className="form-grid">
-              {guestRelationships.map((relationship) => (
-                <label className="form-field" key={relationship}>
-                  <span className="capitalize">{relationship} guest fee (৳)</span>
-                  <input type="number" min="0" step="0.01" value={guestFees[relationship]} onChange={(changeEvent) => setGuestFees((current) => ({ ...current, [relationship]: changeEvent.target.value }))} />
-                  {errors[`guest_${relationship}`] && <small className="field-error">{errors[`guest_${relationship}`]}</small>}
-                </label>
-              ))}
+              <label className="form-field">
+                <span>Common Guest Fee (BDT)</span>
+                <input type="number" min="0" step="0.01" value={commonGuestFee} onChange={(changeEvent) => setCommonGuestFee(changeEvent.target.value)} aria-invalid={Boolean(errors.commonGuestFee)} />
+                {errors.commonGuestFee && <small className="field-error">{errors.commonGuestFee}</small>}
+              </label>
+              <label className="form-field">
+                <span>Child Under 6 Years Fee (BDT)</span>
+                <input type="number" min="0" step="0.01" value={childUnder6Fee} onChange={(changeEvent) => setChildUnder6Fee(changeEvent.target.value)} aria-invalid={Boolean(errors.childUnder6Fee)} />
+                {errors.childUnder6Fee && <small className="field-error">{errors.childUnder6Fee}</small>}
+              </label>
+              <label className="form-field">
+                <span>Child Above 6 Years Fee (BDT)</span>
+                <input type="number" min="0" step="0.01" value={childAbove6Fee} onChange={(changeEvent) => setChildAbove6Fee(changeEvent.target.value)} aria-invalid={Boolean(errors.childAbove6Fee)} />
+                {errors.childAbove6Fee && <small className="field-error">{errors.childAbove6Fee}</small>}
+              </label>
             </div>
           </>
         )}

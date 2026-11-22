@@ -85,7 +85,7 @@ function VolunteerDashboard() {
         <div className="empty-state distribution-empty">
           <h2>No assigned events</h2>
           <p>A Super Admin must first assign you to an event in Ticket Management and grant access to specific distribution items.</p>
-          <a className="button button-outline" href="/volunteer/scanner">Open ticket scanner</a>
+          <a className="button button-outline" href="/volunteer/distributions">Open item distribution scanner</a>
         </div>
       )}
       {!loading && !error && events.length > 0 && (

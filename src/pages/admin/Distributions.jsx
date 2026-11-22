@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { formatEventDateTime } from '../../lib/eventUtils.js'
 import { useDistributionRealtime } from '../../hooks/useDistributionRealtime.js'
 import { getAdminEvents } from '../../services/eventService.js'
@@ -18,6 +18,20 @@ import {
   getEventTicketAssignments,
   getTicketVolunteerCandidates,
 } from '../../services/ticketService.js'
+
+const distributionTabStorageKey = 'evently:/admin/distributions:active-tab'
+const distributionTabValues = ['item-setup', 'live-inventory', 'item-wise-volunteer', 'auditable-history', 'staff-activity']
+
+function getStoredDistributionTab() {
+  try {
+    const storedTab = window.sessionStorage.getItem(distributionTabStorageKey)
+    if (!distributionTabValues.includes(storedTab)) return 'item-setup'
+    return storedTab === 'item-wise-volunteer' ? 'item-catalog' : storedTab
+  } catch (error) {
+    console.error('The active distribution tab could not be restored.', error)
+    return 'item-setup'
+  }
+}
 
 const emptyForm = {
   id: '',
@@ -59,6 +73,7 @@ function getItemAvailability(item) {
 }
 
 function Distributions() {
+  const [activeTab, setActiveTab] = useState(getStoredDistributionTab)
   const [events, setEvents] = useState([])
   const [volunteerCandidates, setVolunteerCandidates] = useState([])
   const [eventFilter, setEventFilter] = useState('')
@@ -81,6 +96,7 @@ function Distributions() {
   const [assignmentItemId, setAssignmentItemId] = useState('')
   const [assignmentResult, setAssignmentResult] = useState({ itemId: '', assignments: [], eventVolunteers: [], error: '' })
   const [assignmentVolunteerId, setAssignmentVolunteerId] = useState('')
+  const [assignmentSearch, setAssignmentSearch] = useState('')
   const [assignmentBusy, setAssignmentBusy] = useState(false)
   const [assignmentActionError, setAssignmentActionError] = useState('')
   const [correctionTarget, setCorrectionTarget] = useState(null)
@@ -88,10 +104,19 @@ function Distributions() {
   const [correctionReason, setCorrectionReason] = useState('')
   const [correctionBusy, setCorrectionBusy] = useState(false)
 
+  useEffect(() => {
+    const storedTab = activeTab === 'item-catalog' ? 'item-wise-volunteer' : activeTab
+    try {
+      window.sessionStorage.setItem(distributionTabStorageKey, storedTab)
+    } catch (error) {
+      console.error('The active distribution tab could not be saved.', error)
+    }
+  }, [activeTab])
+
   const refresh = useCallback(() => setRetry((value) => value + 1), [])
   const queryKey = JSON.stringify([eventFilter, itemFilter, volunteerFilter, statusFilter, retry])
   const loading = loadedQueryKey !== queryKey
-  const realtime = useDistributionRealtime({
+  useDistributionRealtime({
     eventId: eventFilter,
     onChange: refresh,
     onFallback: refresh,
@@ -159,6 +184,19 @@ function Distributions() {
   const eventVolunteers = assignmentResult.itemId === assignmentItemId ? assignmentResult.eventVolunteers : []
   const assignmentError = assignmentResult.itemId === assignmentItemId ? assignmentResult.error : ''
   const assignmentLoading = Boolean(selectedAssignmentItem && assignmentResult.itemId !== assignmentItemId)
+  const searchTerm = assignmentSearch.trim().toLowerCase()
+  const filteredEventVolunteers = !searchTerm
+    ? eventVolunteers
+    : eventVolunteers.filter((volunteer) => [
+      volunteer.volunteer_name,
+      volunteer.volunteer_email,
+      volunteer.volunteer_phone,
+      volunteer.phone_number,
+      volunteer.phone,
+    ].some((value) => String(value || '').toLowerCase().includes(searchTerm)))
+  const selectedVolunteerIsVisible = filteredEventVolunteers.some(
+    (volunteer) => volunteer.volunteer_user_id === assignmentVolunteerId,
+  )
 
   useEffect(() => {
     if (!selectedAssignmentItem) return undefined
@@ -214,6 +252,7 @@ function Distributions() {
       )
       setForm({ ...emptyForm, eventId: form.eventId })
       setAssignmentItemId(savedId)
+      setActiveTab('item-catalog')
       refresh()
     } catch (saveError) {
       setActionError(saveError.message || 'The distribution item could not be saved.')
@@ -236,6 +275,7 @@ function Distributions() {
       isActive: item.is_active,
       guestEligible: item.guest_eligible !== false,
     })
+    setActiveTab('item-setup')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -313,17 +353,34 @@ function Distributions() {
 
   return (
     <section className="admin-page distribution-admin-page">
-      <header className="admin-page-heading distribution-admin-heading">
-        <div><span className="eyebrow">EVENT OPERATIONS</span><h1>Distributions</h1><p>Create event-specific inventory, grant item-level volunteer access, and follow distribution activity.</p></div>
-        <div className={`distribution-connection is-${realtime}`} role="status"><span aria-hidden="true" />{realtime === 'connected' ? 'Live updates on' : realtime === 'reconnecting' ? 'Reconnecting · checking for updates' : realtime === 'connecting' ? 'Connecting to live updates' : 'Live updates off'}</div>
-      </header>
+      <nav className="distribution-tabs" role="tablist" aria-label="Distribution sections">
+        {[
+          ['item-setup', 'ITEM SETUP'],
+          ['live-inventory', 'LIVE INVENTORY'],
+          ['item-catalog', 'ITEM WISE VOLUNTEER'],
+          ['auditable-history', 'AUDITABLE HISTORY'],
+          ['staff-activity', 'STAFF ACTIVITY'],
+        ].map(([tab, label]) => (
+          <button
+            className={activeTab === tab ? 'is-active' : ''}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            aria-controls={`distribution-panel-${tab}`}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {pageError && <p className="form-feedback" role="alert">{pageError}<button className="inline-button" type="button" onClick={refresh}>Try again</button></p>}
       {actionError && <p className="form-feedback" role="alert">{actionError}</p>}
       {success && <p className="inline-notice" role="status">{success}</p>}
 
-      <section className="distribution-editor-panel">
-        <div className="distribution-section-heading"><div><span className="eyebrow">ITEM SETUP</span><h2>{form.id ? 'Edit distribution item' : 'Create a distribution item'}</h2><p>Item names, stock levels, limits, and event links are managed here—not fixed in the app.</p></div>{form.id && <button className="inline-button" type="button" onClick={() => setForm({ ...emptyForm, eventId: eventFilter || String(events[0]?.id || '') })}>Cancel edit</button>}</div>
+      <section className="distribution-editor-panel" id="distribution-panel-item-setup" role="tabpanel" aria-label="Item setup" hidden={activeTab !== 'item-setup'}>
+        <div className="distribution-section-heading"><div><p>Create or edit event inventory, stock levels, limits, and item eligibility.</p></div>{form.id && <button className="inline-button" type="button" onClick={() => setForm({ ...emptyForm, eventId: eventFilter || String(events[0]?.id || '') })}>Cancel edit</button>}</div>
         <form className="distribution-item-form" onSubmit={(event) => void handleSaveItem(event)}>
           <label className="form-field"><span>Event</span><select value={form.eventId} onChange={(event) => setForm((current) => ({ ...current, eventId: event.target.value }))} required><option value="">Select an event</option>{events.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</select>{form.id && <small>Changing the event moves this item and safely resets event-scoped volunteer assignments.</small>}</label>
           <label className="form-field"><span>Item name</span><input value={form.itemName} onChange={(event) => setForm((current) => ({ ...current, itemName: event.target.value }))} maxLength={120} required placeholder="Enter a custom item name" /></label>
@@ -339,9 +396,9 @@ function Distributions() {
         </form>
       </section>
 
-      <section className="distribution-analytics-section">
+      <section className="distribution-analytics-section" id="distribution-panel-live-inventory" role="tabpanel" aria-label="Live inventory" hidden={activeTab !== 'live-inventory'}>
         <div className="distribution-section-heading">
-          <div><span className="eyebrow">LIVE INVENTORY</span><h2>Distribution overview</h2></div>
+          <div><p>Current event inventory, distribution progress, and scan-session totals.</p></div>
           <label className="form-field distribution-event-filter"><span>Event</span><select value={eventFilter} onChange={(event) => { setEventFilter(event.target.value); setItemFilter('') }}><option value="">All events</option>{events.map((event) => <option value={event.id} key={event.id}>{event.title}</option>)}</select></label>
         </div>
         {loading && <p className="admin-muted" role="status">Loading distribution analytics…</p>}
@@ -374,9 +431,9 @@ function Distributions() {
         )}
       </section>
 
-      <section className="distribution-items-section">
+      <section className="distribution-items-section" id="distribution-panel-item-catalog" role="tabpanel" aria-label="Item wise volunteer" hidden={activeTab !== 'item-catalog'}>
         <div className="distribution-section-heading">
-          <div><span className="eyebrow">DYNAMIC ITEM CATALOG</span><h2>Items and inventory</h2></div>
+          <div><p>Review and manage distribution items, inventory, and item-level volunteer access.</p></div>
           <div className="distribution-items-toolbar"><label className="form-field"><span>Distribution status</span><select value={itemAvailabilityFilter} onChange={(event) => setItemAvailabilityFilter(event.target.value)}><option value="">All item statuses</option><option value="active">Available</option><option value="unavailable">Unavailable</option><option value="inactive">Inactive</option></select></label><button className="inline-button" type="button" onClick={refresh}>Refresh</button></div>
         </div>
         {!loading && items.length === 0 && <div className="empty-state"><h2>No distribution items configured</h2><p>Create an item above to start tracking event inventory.</p></div>}
@@ -386,49 +443,65 @@ function Distributions() {
             <table className="admin-table distribution-items-table">
               <thead><tr><th>Item / event</th><th>Inventory</th><th>Limit</th><th>Window / location</th><th>Volunteers</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>{visibleItems.map((item) => (
-                <tr key={item.item_id}>
-                  <td><strong>{item.item_name}</strong><small>{eventTitle(item.event_id)}</small></td>
-                  <td><strong>{formatQuantity(item.quantity_distributed)} / {formatQuantity(item.total_quantity)}</strong><small>{formatQuantity(item.remaining_inventory)} remaining</small></td>
-                  <td>{item.max_per_participant} per participant</td>
-                  <td>{item.distribution_starts_at ? formatEventDateTime(item.distribution_starts_at) : 'Any time'}<small>{item.distribution_location || 'Location not set'}</small></td>
-                  <td>{item.active_volunteer_count}</td>
-                  <td><span className={`distribution-state-badge is-${getItemAvailability(item)}`}>{getItemAvailability(item)}</span></td>
-                  <td><div className="admin-row-actions"><button className="inline-button" type="button" onClick={() => editItem(item)}>Edit</button><button className="inline-button" type="button" onClick={() => setAssignmentItemId(String(item.item_id))}>Volunteers</button><button className="inline-button" type="button" onClick={() => void toggleItem(item)}>{item.is_active ? 'Deactivate' : 'Activate'}</button></div></td>
-                </tr>
+                <Fragment key={item.item_id}>
+                  <tr>
+                    <td><strong>{item.item_name}</strong><small>{eventTitle(item.event_id)}</small></td>
+                    <td><strong>{formatQuantity(item.quantity_distributed)} / {formatQuantity(item.total_quantity)}</strong><small>{formatQuantity(item.remaining_inventory)} remaining</small></td>
+                    <td>{item.max_per_participant} per participant</td>
+                    <td>{item.distribution_starts_at ? formatEventDateTime(item.distribution_starts_at) : 'Any time'}<small>{item.distribution_location || 'Location not set'}</small></td>
+                    <td>{item.active_volunteer_count}</td>
+                    <td><span className={`distribution-state-badge is-${getItemAvailability(item)}`}>{getItemAvailability(item)}</span></td>
+                    <td><div className="admin-row-actions"><button className="inline-button" type="button" onClick={() => editItem(item)}>Edit</button><button className="inline-button" type="button" aria-expanded={assignmentItemId === String(item.item_id)} onClick={() => {
+                      const nextItemId = assignmentItemId === String(item.item_id) ? '' : String(item.item_id)
+                      setAssignmentItemId(nextItemId)
+                      setAssignmentVolunteerId('')
+                      setAssignmentSearch('')
+                      setAssignmentActionError('')
+                    }}>Volunteers</button><button className="inline-button" type="button" onClick={() => void toggleItem(item)}>{item.is_active ? 'Deactivate' : 'Activate'}</button></div></td>
+                  </tr>
+                  {assignmentItemId === String(item.item_id) && (
+                    <tr className="distribution-permissions-row">
+                      <td colSpan="7">
+                        <div className="distribution-inline-assignment">
+                          <div className="distribution-inline-assignment-heading">
+                            <div><h3>Volunteer access · {selectedAssignmentItem?.item_name}</h3><p>Only active volunteers assigned to {eventTitle(item.event_id)} can receive access to this item.</p></div>
+                            <button className="inline-button" type="button" onClick={() => setAssignmentItemId('')}>Close</button>
+                          </div>
+                          {assignmentError && <p className="form-feedback" role="alert">{assignmentError}</p>}
+                          {assignmentActionError && <p className="form-feedback" role="alert">{assignmentActionError}</p>}
+                          {assignmentLoading && <p className="admin-muted" role="status">Loading item permissions…</p>}
+                          {!assignmentLoading && (
+                            <>
+                              <form className="distribution-assignment-form" onSubmit={(event) => { event.preventDefault(); void handleSetAssignment(assignmentVolunteerId, true) }}>
+                                <label className="form-field"><span>Search volunteer by name, phone, or email</span><input type="search" value={assignmentSearch} onChange={(event) => setAssignmentSearch(event.target.value)} placeholder="Search volunteer by name, phone, or email..." /></label>
+                                <label className="form-field"><span>Event-assigned volunteer</span><select value={assignmentVolunteerId} onChange={(event) => setAssignmentVolunteerId(event.target.value)} required><option value="">Select a volunteer</option>{filteredEventVolunteers.map((volunteer) => <option value={volunteer.volunteer_user_id} key={volunteer.volunteer_user_id}>{volunteer.volunteer_name} · {volunteer.volunteer_email}</option>)}</select></label>
+                                <button className="button button-primary button-small" type="submit" disabled={assignmentBusy || !assignmentVolunteerId || !selectedVolunteerIsVisible}>{assignmentBusy ? 'Saving…' : 'Grant item access'}</button>
+                              </form>
+                              {!eventVolunteers.length && <p className="admin-muted">No active event volunteers. Assign volunteers first from Ticket Management.</p>}
+                              {eventVolunteers.length > 0 && !filteredEventVolunteers.length && <p className="admin-muted">No active event volunteers match this search.</p>}
+                              {!assignments.length && <p className="admin-muted">No volunteers have item-specific access yet.</p>}
+                              {assignments.length > 0 && <div className="distribution-assignee-list">{assignments.map((volunteer) => (
+                                <div className="distribution-assignee-row" key={volunteer.volunteer_user_id}>
+                                  <div><strong>{volunteer.volunteer_name}</strong><small>{volunteer.volunteer_email}</small></div>
+                                  <span className={`ticket-status-badge ${volunteer.is_active ? 'is-active' : 'is-revoked'}`}>{volunteer.is_active ? 'Active' : 'Removed'}</span>
+                                  {volunteer.is_active && <button className="inline-button danger-link" type="button" disabled={assignmentBusy} onClick={() => void handleSetAssignment(volunteer.volunteer_user_id, false)}>Revoke</button>}
+                                </div>
+                              ))}</div>}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}</tbody>
             </table>
           </div>
         )}
       </section>
 
-      {selectedAssignmentItem && (
-        <section className="distribution-assignment-panel">
-          <div className="distribution-section-heading"><div><span className="eyebrow">ITEM-SCOPED PERMISSIONS</span><h2>Volunteer access · {selectedAssignmentItem.item_name}</h2><p>Only volunteers already assigned to {eventTitle(selectedAssignmentItem.event_id)} in Ticket Management can receive item access.</p></div><button className="inline-button" type="button" onClick={() => setAssignmentItemId('')}>Close</button></div>
-          {assignmentError && <p className="form-feedback" role="alert">{assignmentError}</p>}
-          {assignmentActionError && <p className="form-feedback" role="alert">{assignmentActionError}</p>}
-          {assignmentLoading && <p className="admin-muted" role="status">Loading item permissions…</p>}
-          {!assignmentLoading && (
-            <>
-              <form className="distribution-assignment-form" onSubmit={(event) => { event.preventDefault(); void handleSetAssignment(assignmentVolunteerId, true) }}>
-                <label className="form-field"><span>Event-assigned volunteer</span><select value={assignmentVolunteerId} onChange={(event) => setAssignmentVolunteerId(event.target.value)} required><option value="">Select a volunteer</option>{eventVolunteers.map((volunteer) => <option value={volunteer.volunteer_user_id} key={volunteer.volunteer_user_id}>{volunteer.volunteer_name} · {volunteer.volunteer_email}</option>)}</select></label>
-                <button className="button button-primary button-small" type="submit" disabled={assignmentBusy || !assignmentVolunteerId}>{assignmentBusy ? 'Saving…' : 'Grant item access'}</button>
-              </form>
-              {!eventVolunteers.length && <p className="admin-muted">No active event volunteers. Assign volunteers first from Ticket Management.</p>}
-              {!assignments.length && <p className="admin-muted">No volunteers have item-specific access yet.</p>}
-              {assignments.length > 0 && <div className="distribution-assignee-list">{assignments.map((volunteer) => (
-                <div className="distribution-assignee-row" key={volunteer.volunteer_user_id}>
-                  <div><strong>{volunteer.volunteer_name}</strong><small>{volunteer.volunteer_email}</small></div>
-                  <span className={`ticket-status-badge ${volunteer.is_active ? 'is-active' : 'is-revoked'}`}>{volunteer.is_active ? 'Active' : 'Removed'}</span>
-                  {volunteer.is_active && <button className="inline-button danger-link" type="button" disabled={assignmentBusy} onClick={() => void handleSetAssignment(volunteer.volunteer_user_id, false)}>Remove</button>}
-                </div>
-              ))}</div>}
-            </>
-          )}
-        </section>
-      )}
-
-      <section className="distribution-activity-section">
-        <div className="distribution-section-heading"><div><span className="eyebrow">AUDITABLE HISTORY</span><h2>Distribution activity</h2></div></div>
+      <section className="distribution-activity-section" id="distribution-panel-auditable-history" role="tabpanel" aria-label="Auditable history" hidden={activeTab !== 'auditable-history'}>
+        <div className="distribution-section-heading"><div><p>Review distribution records and enter corrections with an audit reason.</p></div></div>
         <div className="distribution-history-filters">
           <label className="form-field"><span>Item</span><select value={itemFilter} onChange={(event) => setItemFilter(event.target.value)}><option value="">All items</option>{items.map((item) => <option value={item.item_id} key={item.item_id}>{item.item_name}</option>)}</select></label>
           <label className="form-field"><span>Volunteer / staff</span><select value={volunteerFilter} onChange={(event) => setVolunteerFilter(event.target.value)}><option value="">All staff</option>{volunteerCandidates.map((volunteer) => <option value={volunteer.volunteer_user_id} key={volunteer.volunteer_user_id}>{volunteer.volunteer_name}</option>)}</select></label>
@@ -465,8 +538,8 @@ function Distributions() {
         )}
       </section>
 
-      <section className="distribution-volunteer-activity">
-        <div className="distribution-section-heading"><div><span className="eyebrow">STAFF ACTIVITY</span><h2>Volunteer-wise totals</h2></div></div>
+      <section className="distribution-volunteer-activity" id="distribution-panel-staff-activity" role="tabpanel" aria-label="Staff activity" hidden={activeTab !== 'staff-activity'}>
+        <div className="distribution-section-heading"><div><p>Totals summarize volunteer distribution records and any corrected quantity.</p></div></div>
         {loading && <p className="admin-muted" role="status">Loading staff totals…</p>}
         {!loading && !volunteerActivity.length && <p className="admin-muted">No distribution activity has been recorded.</p>}
         {!loading && volunteerActivity.length > 0 && <div className="distribution-staff-grid">{volunteerActivity.map((person) => (

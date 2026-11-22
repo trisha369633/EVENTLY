@@ -43,7 +43,7 @@ const PaymentReceipt = lazy(() => import('./pages/payments/PaymentReceipt.jsx'))
 const TicketScanner = lazy(() => import('./pages/tickets/TicketScanner.jsx'))
 const adminRoles = ['super_admin']
 const redirectNonAdmin = (roles) => (
-  roles.includes('participant') ? '/dashboard' : roles.includes('volunteer') ? '/volunteer/scanner' : '/'
+  roles.includes('participant') ? '/dashboard' : roles.includes('volunteer') ? '/volunteer/distributions' : '/'
 )
 
 function PageLoading() {

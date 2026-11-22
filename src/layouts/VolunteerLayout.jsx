@@ -2,7 +2,6 @@ function VolunteerLayout({ children }) {
   const path = window.location.pathname
   const links = [
     { href: '/volunteer', label: 'My Assigned Events', active: path === '/volunteer' },
-    { href: '/volunteer/scanner', label: 'QR Ticket Scanner', active: path === '/volunteer/scanner' },
     { href: '/volunteer/distributions', label: 'Item Distribution', active: path === '/volunteer/distributions' },
     { href: '/volunteer/history', label: 'My Distribution History', active: path === '/volunteer/history' },
   ]

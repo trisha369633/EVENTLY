@@ -229,11 +229,6 @@ function VolunteerManagement() {
 
   return (
     <section className="admin-page volunteer-management-page">
-      <header className="admin-page-heading">
-        <div><span className="eyebrow">ACCESS & STAFF</span><h1>Volunteer Management</h1><p>Manage role membership, event assignments, item-level distribution access, and activity.</p></div>
-        <button className="button button-outline" type="button" onClick={refresh} disabled={directoryLoading || managementLoading}>Refresh</button>
-      </header>
-
       {actionError && <p className="form-feedback" role="alert">{actionError}</p>}
       {notice && <p className="inline-notice" role="status">{notice}</p>}
       {!directoryLoading && <RpcErrorNotice error={directory.error} />}
@@ -242,7 +237,7 @@ function VolunteerManagement() {
       {managementData?.distributionError && <p className="inline-notice" role="status">{managementData.distributionError} Event assignments remain manageable.</p>}
       {managementData?.itemAssignmentError && <p className="inline-notice" role="status">{managementData.itemAssignmentError}</p>}
 
-      <section className="admin-section-panel">
+      <section className="admin-section-panel volunteer-directory-panel">
         <div className="admin-section-heading"><div><h2>All Volunteers & Search Users</h2><p>Search existing profiles, view role rows, and grant or revoke only the volunteer role.</p></div></div>
         <form className="volunteer-search-form" onSubmit={handleSearch}>
           <label className="form-field"><span>Search registered users</span><input type="search" value={searchText} onChange={(event) => setSearchText(event.target.value)} maxLength={100} placeholder="Search name or email" /></label>

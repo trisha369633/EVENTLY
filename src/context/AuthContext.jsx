@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AuthContext } from './authContextInstance.js'
 import { getSupabaseClient, getSupabaseConfigurationError } from '../lib/supabase.js'
 import { getFriendlyAuthError, registerWithEmail, signInWithEmail, signInWithIdentity, signOut } from '../services/authService.js'
@@ -18,8 +18,10 @@ export function AuthProvider({ children }) {
   const [participantType, setParticipantType] = useState(null)
   const [loading, setLoading] = useState(!configurationError)
   const [authError, setAuthError] = useState(configurationError)
+  const accessUserIdRef = useRef('')
 
   const loadUserAccess = useCallback(async (currentUser, isActive = () => true) => {
+    accessUserIdRef.current = currentUser.id
     try {
       const ensuredIdentity = await ensureUserIdentity(currentUser)
       const [nextProfile, nextRoles, identity] = await Promise.all([
@@ -68,17 +70,25 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return
+      const nextUser = nextSession?.user || null
+      if (nextUser && accessUserIdRef.current === nextUser.id) {
+        setSession(nextSession)
+        setUser(nextUser)
+        return
+      }
       window.clearTimeout(hydrationTimer)
       setSession(nextSession)
-      setUser(nextSession?.user || null)
+      setUser(nextUser)
       setAuthError('')
 
-      if (nextSession?.user) {
+      if (nextUser) {
+        accessUserIdRef.current = nextUser.id
         setLoading(true)
         hydrationTimer = window.setTimeout(() => {
-          void loadUserAccess(nextSession.user, () => active)
+          void loadUserAccess(nextUser, () => active)
         }, 0)
       } else {
+        accessUserIdRef.current = ''
         setProfile(null)
         setRoles([])
         setParticipantType(null)

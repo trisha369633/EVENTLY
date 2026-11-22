@@ -69,6 +69,9 @@ function EventRegistration({ slug }) {
     maxGuests: 0,
     remainingCapacity: 0,
     relationships: [],
+    commonFee: 0,
+    childUnder6Fee: 0,
+    childAbove6Fee: 0,
   })
   const [bringingGuests, setBringingGuests] = useState(false)
   const [guests, setGuests] = useState([])
@@ -112,21 +115,28 @@ function EventRegistration({ slug }) {
       .then((rows) => {
         if (!active) return
         const first = rows[0]
+        const commonFee = Number(first?.common_guest_fee ?? rows.find((row) => row.relationship && row.relationship !== 'child')?.guest_fee ?? 0)
+        const childUnder6Fee = Number(first?.child_under_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0)
+        const childAbove6Fee = Number(first?.child_above_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0)
         setGuestSettings({
           isEnabled: Boolean(first?.is_enabled),
           maxGuests: Number(first?.max_guests_per_participant || 0),
           remainingCapacity: Number(first?.remaining_guest_capacity || 0),
-          relationships: rows
-            .filter((row) => row.relationship && row.relationship_is_active)
-            .map((row) => ({
-              value: row.relationship,
-              label: row.relationship[0].toUpperCase() + row.relationship.slice(1),
-              fee: Number(row.guest_fee || 0),
+          commonFee,
+          childUnder6Fee,
+          childAbove6Fee,
+          relationships: [
+            ...['father', 'mother', 'sister', 'brother', 'husband', 'wife'].map((relationship) => ({
+              value: relationship,
+              label: relationship[0].toUpperCase() + relationship.slice(1),
+              fee: commonFee,
             })),
+            { value: 'child', label: 'Child', fee: 0 },
+          ],
         })
       })
       .catch(() => {
-        if (active) setGuestSettings({ isEnabled: false, maxGuests: 0, remainingCapacity: 0, relationships: [] })
+        if (active) setGuestSettings({ isEnabled: false, maxGuests: 0, remainingCapacity: 0, relationships: [], commonFee: 0, childUnder6Fee: 0, childAbove6Fee: 0 })
       })
     return () => {
       active = false
@@ -275,6 +285,12 @@ function EventRegistration({ slug }) {
         if (!guestSettings.relationships.some((relationship) => relationship.value === guest.relationship)) {
           nextErrors[`guest_relationship_${index}`] = 'Select an enabled guest relationship.'
         }
+        if (guest.relationship === 'child' && !['under_6', 'above_6'].includes(guest.child_age_category)) {
+          nextErrors[`guest_age_${index}`] = 'Select a child age category.'
+        }
+        if (guest.relationship !== 'child' && guest.child_age_category) {
+          nextErrors[`guest_age_${index}`] = 'Child age category is only valid for a child guest.'
+        }
       })
     }
     setErrors(nextErrors)
@@ -299,6 +315,7 @@ function EventRegistration({ slug }) {
         guests: bringingGuests ? guests.map((guest) => ({
           full_name: guest.full_name.trim(),
           relationship: guest.relationship,
+          child_age_category: guest.relationship === 'child' ? guest.child_age_category : null,
         })) : [],
       })
       if (Number(result.fee_amount) > 0) {
@@ -359,7 +376,13 @@ function EventRegistration({ slug }) {
 
   const participantFee = values.participant_type ? event[`${values.participant_type}_fee`] : null
   const selectedGuestFees = guests.map((guest) => (
-    guestSettings.relationships.find((relationship) => relationship.value === guest.relationship)?.fee || 0
+    guest.relationship === 'child'
+      ? guest.child_age_category === 'under_6'
+        ? guestSettings.childUnder6Fee
+        : guest.child_age_category === 'above_6'
+          ? guestSettings.childAbove6Fee
+          : 0
+      : guestSettings.relationships.find((relationship) => relationship.value === guest.relationship)?.fee || guestSettings.commonFee
   ))
   const guestFeeTotal = selectedGuestFees.reduce((total, fee) => total + Number(fee), 0)
   const grandTotal = (Number(participantFee) || 0) + guestFeeTotal
@@ -433,7 +456,7 @@ function EventRegistration({ slug }) {
               <label className="check-option">
                 <input type="checkbox" checked={bringingGuests} onChange={(changeEvent) => {
                   setBringingGuests(changeEvent.target.checked)
-                  if (changeEvent.target.checked && !guests.length) setGuests([{ full_name: '', relationship: '' }])
+                  if (changeEvent.target.checked && !guests.length) setGuests([{ full_name: '', relationship: '', child_age_category: '' }])
                   if (!changeEvent.target.checked) setGuests([])
                 }} />
                 <span>Are you bringing guest(s)?</span>
@@ -451,14 +474,41 @@ function EventRegistration({ slug }) {
                         </label>
                         <label className="form-field">
                           <span>Relationship</span>
-                          <select value={guest.relationship} onChange={(changeEvent) => setGuests((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, relationship: changeEvent.target.value } : item))}>
+                          <select value={guest.relationship} onChange={(changeEvent) => setGuests((current) => current.map((item, itemIndex) => itemIndex === index ? {
+                            ...item,
+                            relationship: changeEvent.target.value,
+                            child_age_category: changeEvent.target.value === 'child' ? item.child_age_category : '',
+                          } : item))}>
                             <option value="">Select relationship</option>
-                            {guestSettings.relationships.map((relationship) => <option value={relationship.value} key={relationship.value}>{relationship.label} — {formatFee(relationship.fee)}</option>)}
+                            {guestSettings.relationships.map((relationship) => <option value={relationship.value} key={relationship.value}>{relationship.label}</option>)}
                           </select>
                           {errors[`guest_relationship_${index}`] && <small className="field-error">{errors[`guest_relationship_${index}`]}</small>}
                         </label>
-                        {selectedRelationship && <small className="guest-row-fee">Guest fee: {formatFee(selectedRelationship.fee)}</small>}
-                        <button className="inline-button danger-link" type="button" onClick={() => setGuests((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove guest</button>
+                        {guest.relationship === 'child' && (
+                          <label className="form-field">
+                            <span>Child Age Category</span>
+                            <select
+                              value={guest.child_age_category || ''}
+                              onChange={(changeEvent) => setGuests((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, child_age_category: changeEvent.target.value } : item))}
+                              aria-invalid={Boolean(errors[`guest_age_${index}`])}
+                            >
+                              <option value="">Select age category</option>
+                              <option value="under_6">Under 6 Years — {formatFee(guestSettings.childUnder6Fee)}</option>
+                              <option value="above_6">Above 6 Years — {formatFee(guestSettings.childAbove6Fee)}</option>
+                            </select>
+                            {errors[`guest_age_${index}`] && <small className="field-error">{errors[`guest_age_${index}`]}</small>}
+                          </label>
+                        )}
+                        <div className="guest-row-actions">
+                          {selectedRelationship && (
+                            <small className="guest-row-fee">
+                              Guest fee: {guest.relationship === 'child' && !guest.child_age_category
+                                ? 'Select age category'
+                                : formatFee(selectedGuestFees[index])}
+                            </small>
+                          )}
+                          <button className="inline-button danger-link" type="button" onClick={() => setGuests((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove guest</button>
+                        </div>
                       </div>
                     )
                   })}
@@ -467,7 +517,7 @@ function EventRegistration({ slug }) {
                     className="button button-outline button-small"
                     type="button"
                     disabled={guests.length >= guestSettings.maxGuests || guests.length >= guestSettings.remainingCapacity}
-                    onClick={() => setGuests((current) => [...current, { full_name: '', relationship: '' }])}
+                    onClick={() => setGuests((current) => [...current, { full_name: '', relationship: '', child_age_category: '' }])}
                   >
                     Add guest
                   </button>
@@ -491,7 +541,19 @@ function EventRegistration({ slug }) {
           {bringingGuests && guests.map((guest, index) => {
             const relationship = guestSettings.relationships.find((item) => item.value === guest.relationship)
             return relationship ? (
-              <div key={index}><span>Guest {index + 1} — {relationship.label}</span><strong>{formatFee(relationship.fee)}</strong></div>
+              <div key={index}>
+                <span>
+                  Guest {index + 1} — {relationship.label}
+                  {guest.relationship === 'child' && guest.child_age_category
+                    ? ` — ${guest.child_age_category === 'under_6' ? 'Under 6 Years' : 'Above 6 Years'}`
+                    : ''}
+                </span>
+                <strong>
+                  {guest.relationship === 'child' && !guest.child_age_category
+                    ? 'Select age category'
+                    : formatFee(selectedGuestFees[index])}
+                </strong>
+              </div>
             ) : null
           })}
           {bringingGuests && <div><span>Total guest fee</span><strong>{formatFee(guestFeeTotal)}</strong></div>}

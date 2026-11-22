@@ -2891,6 +2891,15 @@
   font-weight: 700;
 }
 
+.guest-row-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
 .my-attendee-ticket-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -4104,6 +4113,183 @@ body:has(.registration-details-backdrop) {
   gap: 12px 18px;
 }
 
+.admin-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  width: calc(100% - 20px);
+  max-width: none;
+  min-height: calc(100vh - 56px);
+  margin: 10px auto 12px;
+  padding: 0;
+}
+
+.admin-sidebar {
+  position: sticky;
+  top: 66px;
+  align-content: start;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - 78px);
+  max-height: none;
+  overflow-y: auto;
+  padding: 22px 12px;
+  border: 0;
+  border-right: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 12px;
+  background: var(--green-dark);
+  box-shadow: none;
+}
+
+.admin-sidebar-title {
+  padding: 10px 12px 14px;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 1.15px;
+}
+
+.admin-sidebar-links {
+  display: grid;
+  gap: 5px;
+}
+
+.admin-sidebar a {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.3;
+  text-decoration: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.admin-sidebar a:hover {
+  background: rgb(255 255 255 / 10%);
+  color: #fff;
+}
+
+.admin-sidebar a.active {
+  border-color: rgb(255 255 255 / 12%);
+  background: #1b6348;
+  color: #fff;
+  font-weight: 650;
+}
+
+.admin-layout-content {
+  min-width: 0;
+  padding: clamp(22px, 3vw, 42px);
+}
+
+.admin-layout .button {
+  border-radius: 9px;
+}
+
+.admin-page {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-page > *,
+.admin-page article,
+.admin-page section {
+  min-width: 0;
+}
+
+.admin-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+  scrollbar-gutter: stable;
+}
+
+.admin-page .admin-toolbar,
+.admin-page .admin-page-heading {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .admin-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .admin-sidebar {
+    position: relative;
+    top: auto;
+    display: grid;
+    height: auto;
+    max-height: 340px;
+    padding: 14px clamp(16px, 3vw, 28px);
+    border-radius: 12px;
+    border-right: 0;
+    border-bottom: 1px solid rgb(255 255 255 / 12%);
+  }
+
+  .admin-sidebar-title {
+    width: auto;
+    padding: 5px 8px;
+  }
+
+  .admin-sidebar-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .admin-sidebar a {
+    min-height: 36px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .admin-layout-content {
+    padding: clamp(20px, 4vw, 32px);
+  }
+
+  .admin-layout {
+    margin-top: 10px;
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-sidebar {
+    max-height: 280px;
+    padding: 12px 14px;
+  }
+
+  .admin-layout-content {
+    padding: 20px 14px 30px;
+  }
+}
+
+body:has(.admin-layout) .site-header {
+  top: 10px;
+  width: calc(100% - 20px);
+  margin: 10px auto 0;
+  border-radius: 12px;
+}
+
+body:has(.admin-layout) .site-header .button,
+body:has(.admin-layout) .site-header .nav-text-action,
+body:has(.admin-layout) .site-footer .button {
+  border-radius: 9px;
+}
+
+body:has(.admin-layout) .site-footer {
+  width: calc(100% - 20px);
+  margin: 12px auto 10px;
+  border-radius: 12px;
+}
+
 .attendee-ticket-identity,
 .attendee-ticket-meta {
   display: grid;
@@ -4300,6 +4486,159 @@ body:has(.registration-details-backdrop) {
   }
 }
 
+.distribution-admin-page {
+  padding-top: 8px;
+}
+
+.distribution-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.distribution-admin-page > [hidden] {
+  display: none;
+}
+
+.distribution-tabs button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid #dfe7e2;
+  border-radius: 9px;
+  background: #fff;
+  color: #355144;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.distribution-tabs button:hover {
+  border-color: #9fb3a7;
+  background: #f3f7f4;
+}
+
+.distribution-tabs button.is-active {
+  border-color: #113829;
+  background: #113829;
+  color: #fff;
+}
+
+.distribution-tabs button:focus-visible {
+  outline: 3px solid rgb(17 56 41 / 24%);
+  outline-offset: 2px;
+}
+
+.distribution-editor-panel > .distribution-section-heading,
+.distribution-analytics-section > .distribution-section-heading,
+.distribution-items-section > .distribution-section-heading,
+.distribution-activity-section > .distribution-section-heading,
+.distribution-volunteer-activity > .distribution-section-heading {
+  align-items: flex-start;
+}
+
+.distribution-section-heading h2 {
+  margin: 0 0 5px;
+  color: #18251e;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+}
+
+.distribution-section-heading p {
+  max-width: 720px;
+  font-size: 12px;
+}
+
+.distribution-permissions-row > td {
+  padding: 0;
+  background: #f6f9f7;
+}
+
+.distribution-inline-assignment {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-top: 1px solid #dfe8e2;
+}
+
+.distribution-inline-assignment-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.distribution-inline-assignment-heading h3 {
+  margin: 0 0 4px;
+  color: #18251e;
+  font-size: 15px;
+}
+
+.distribution-inline-assignment-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.distribution-inline-assignment .distribution-assignment-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin: 0;
+}
+
+.distribution-inline-assignment .distribution-assignment-form .form-field {
+  min-width: 0;
+  margin: 0;
+}
+
+.distribution-inline-assignment .button-primary {
+  background: #113829;
+}
+
+@media (max-width: 760px) {
+  .distribution-tabs {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 2px 2px 8px;
+    scrollbar-width: thin;
+  }
+
+  .distribution-inline-assignment .distribution-assignment-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .distribution-inline-assignment .distribution-assignment-form .button {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 520px) {
+  .distribution-tabs button {
+    min-height: 38px;
+    padding: 8px 11px;
+    font-size: 10px;
+  }
+
+  .distribution-inline-assignment {
+    padding: 13px;
+  }
+
+  .distribution-inline-assignment-heading {
+    align-items: flex-start;
+  }
+}
+
 .my-registration-card:has(.registration-details-backdrop) {
   transform: none;
   transition: none;
@@ -4343,4 +4682,28 @@ body:has(.registration-details-backdrop) {
     height: 88vh;
     max-height: 88vh;
   }
+}
+
+.volunteer-management-page {
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.volunteer-directory-panel > .admin-section-heading {
+  margin-bottom: 18px;
+}
+
+.volunteer-directory-panel > .admin-section-heading h2 {
+  margin: 0 0 6px;
+  line-height: 1.25;
+}
+
+.volunteer-directory-panel > .admin-section-heading p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.volunteer-directory-panel .volunteer-search-form {
+  gap: 12px;
+  margin-bottom: 18px;
 }
