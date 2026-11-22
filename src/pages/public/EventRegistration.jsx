@@ -10,7 +10,7 @@ import {
 } from '../../services/eventService.js'
 import { getUserIdentity } from '../../services/identityService.js'
 import { getProfile, listDepartments, listInstitutions } from '../../services/profileService.js'
-import { getRegistrationByEvent, registerForEvent } from '../../services/registrationService.js'
+import { completeEventRegistration, getRegistrationByEvent } from '../../services/registrationService.js'
 
 const participantTypes = ['student', 'teacher', 'alumni']
 
@@ -75,6 +75,13 @@ function EventRegistration({ slug }) {
   })
   const [bringingGuests, setBringingGuests] = useState(false)
   const [guests, setGuests] = useState([])
+  const [step, setStep] = useState(1)
+  const [paymentMethod, setPaymentMethod] = useState('bkash')
+  const [transactionId, setTransactionId] = useState('')
+  const [senderPhone, setSenderPhone] = useState('')
+  const [paymentNote, setPaymentNote] = useState('')
+  const [paymentFile, setPaymentFile] = useState(null)
+  const [idempotencyKey, setIdempotencyKey] = useState('')
 
   useEffect(() => {
     let active = true
@@ -207,6 +214,33 @@ function EventRegistration({ slug }) {
     }
   }, [authLoading, user, event])
 
+  useEffect(() => {
+    if (!user || !event || !hydratedUserKey) return
+    const key = `evently-registration-draft:${user.id}:${event.id}`
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(key) || 'null')
+      if (saved) {
+        setValues((current) => ({ ...current, ...saved.values }))
+        setAnswers(saved.answers || {})
+        setBringingGuests(Boolean(saved.bringingGuests))
+        setGuests(saved.guests || [])
+      }
+    } catch {
+      sessionStorage.removeItem(key)
+    }
+  }, [hydratedUserKey, event, user])
+
+  useEffect(() => {
+    if (!user || !event || !hydratedUserKey) return
+    const key = `evently-registration-draft:${user.id}:${event.id}`
+    sessionStorage.setItem(key, JSON.stringify({
+      values,
+      answers,
+      bringingGuests,
+      guests,
+    }))
+  }, [values, answers, bringingGuests, guests, hydratedUserKey, event, user])
+
   const availability = useMemo(
     () => event ? getRegistrationAvailability(event, counts) : null,
     [event, counts],
@@ -297,7 +331,7 @@ function EventRegistration({ slug }) {
     return Object.keys(nextErrors).length === 0
   }
 
-  const handleSubmit = async (submitEvent) => {
+  const handleContinue = (submitEvent) => {
     submitEvent.preventDefault()
     if (!user || !roles.includes('participant')) {
       setError('A participant account is required to register.')
@@ -305,10 +339,51 @@ function EventRegistration({ slug }) {
     }
     if (formConfigurationError) return
     if (!validate()) return
+    setError('')
+    setStep(2)
+  }
+
+  const handleComplete = async (submitEvent) => {
+    submitEvent.preventDefault()
+    if (!user || !roles.includes('participant')) {
+      setError('A participant account is required to register.')
+      return
+    }
+    if (formConfigurationError || !validate()) return
+
+    const grandTotal = (Number(values.participant_type ? event[`${values.participant_type}_fee`] : 0) || 0)
+      + (bringingGuests ? guests.reduce((total, guest) => {
+        if (guest.relationship === 'child') {
+          return total + Number(guest.child_age_category === 'under_6'
+            ? guestSettings.childUnder6Fee
+            : guest.child_age_category === 'above_6'
+              ? guestSettings.childAbove6Fee
+              : 0)
+        }
+        return total + Number(guestSettings.commonFee)
+      }, 0) : 0)
+
+    if (grandTotal > 0) {
+      if (!transactionId.trim()) {
+        setError('Transaction ID is required.')
+        return
+      }
+      if (senderPhone && !/^[+\d\s().-]{8,20}$/.test(senderPhone)) {
+        setError('Enter a valid payment phone number.')
+        return
+      }
+      if (!paymentFile) {
+        setError('Upload a payment screenshot before completing registration.')
+        return
+      }
+    }
+
     setSubmitting(true)
     setError('')
     try {
-      const result = await registerForEvent({
+      const key = idempotencyKey || globalThis.crypto.randomUUID()
+      if (!idempotencyKey) setIdempotencyKey(key)
+      const result = await completeEventRegistration({
         event_id: event.id,
         ...values,
         form_answers: answers,
@@ -317,11 +392,20 @@ function EventRegistration({ slug }) {
           relationship: guest.relationship,
           child_age_category: guest.relationship === 'child' ? guest.child_age_category : null,
         })) : [],
+        payment_method: paymentMethod,
+        transaction_id: transactionId,
+        sender_phone: senderPhone,
+        payment_note: paymentNote,
+        file: paymentFile,
+        idempotencyKey: key,
+        isFree: grandTotal <= 0,
       })
-      if (Number(result.fee_amount) > 0) {
-        navigate(`/payments/${result.id}`, { replace: true })
+      if (Number(result.registration_fee_amount) > 0 || Number(result.fee_amount) > 0) {
+        sessionStorage.removeItem(`evently-registration-draft:${user.id}:${event.id}`)
+        navigate(`/payments/${result.registration_id || result.id}`, { replace: true })
         return
       }
+      sessionStorage.removeItem(`evently-registration-draft:${user.id}:${event.id}`)
       setRegistration(result)
       setSuccess(result)
     } catch (submitError) {
@@ -387,6 +471,71 @@ function EventRegistration({ slug }) {
   const guestFeeTotal = selectedGuestFees.reduce((total, fee) => total + Number(fee), 0)
   const grandTotal = (Number(participantFee) || 0) + guestFeeTotal
 
+  if (step === 2) {
+    return (
+      <section className="container registration-page">
+        <a className="back-link registration-back-link" href={`/events/${encodeURIComponent(event.slug)}`}><span aria-hidden="true">←</span> Event details</a>
+        <div className="registration-page-header">
+          <span className="eyebrow">EVENT REGISTRATION</span>
+          <h1>Review and {grandTotal > 0 ? 'pay' : 'complete'}</h1>
+          <p>{formatEventDateTime(event.event_start)} · {event.venue}</p>
+        </div>
+        <div className="registration-progress" aria-label="Registration progress">
+          <span className="complete">Step 1: Participant &amp; Guests</span>
+          <span className="active">Step 2: Payment</span>
+        </div>
+        {(error || lookupError) && <div className="form-feedback" role="alert">{error || lookupError}</div>}
+        <div className="registration-form-layout">
+          <form className="registration-form" onSubmit={(submitEvent) => void handleComplete(submitEvent)} noValidate>
+            <div className="registration-form-section">
+              <h2>Complete registration</h2>
+              <dl className="registration-review-list">
+                <div><dt>Main participant</dt><dd>{values.full_name}</dd></div>
+                <div><dt>Participant type</dt><dd className="capitalize">{values.participant_type}</dd></div>
+                <div><dt>Participant fee</dt><dd>{formatFee(participantFee)}</dd></div>
+                {bringingGuests && guests.map((guest, index) => (
+                  <div key={index}>
+                    <dt>{guest.full_name} — {guest.relationship === 'child'
+                      ? `Child (${guest.child_age_category === 'under_6' ? 'Under 6 Years' : 'Above 6 Years'})`
+                      : guest.relationship}</dt>
+                    <dd>{formatFee(selectedGuestFees[index])}</dd>
+                  </div>
+                ))}
+                <div className="summary-fee"><dt>Total payable</dt><dd>{formatFee(grandTotal)}</dd></div>
+              </dl>
+            </div>
+            {grandTotal > 0 ? (
+              <div className="registration-form-section">
+                <h2>Payment details</h2>
+                <p>Send the exact total of <strong>{formatFee(grandTotal)}</strong> to an Evently payment number.</p>
+                <div className="form-grid">
+                  <label className="form-field"><span>Payment method</span><select value={paymentMethod} onChange={(changeEvent) => setPaymentMethod(changeEvent.target.value)}><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="other">Other</option></select></label>
+                  <label className="form-field"><span>Transaction ID</span><input value={transactionId} onChange={(changeEvent) => setTransactionId(changeEvent.target.value)} required maxLength="128" /></label>
+                  <label className="form-field"><span>Payment phone number</span><input type="tel" value={senderPhone} onChange={(changeEvent) => setSenderPhone(changeEvent.target.value)} autoComplete="tel" maxLength="40" /></label>
+                  <label className="form-field"><span>Payment screenshot</span><input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required onChange={(changeEvent) => setPaymentFile(changeEvent.target.files?.[0] || null)} /><small className="admin-muted">JPG, PNG, or WEBP; maximum 5 MB.</small></label>
+                  <label className="form-field form-field-full"><span>Additional note <small className="optional-hint">(optional)</small></span><textarea rows="3" maxLength="1000" value={paymentNote} onChange={(changeEvent) => setPaymentNote(changeEvent.target.value)} /></label>
+                </div>
+              </div>
+            ) : (
+              <div className="inline-notice" role="status">This is a free event. No payment screenshot or transaction ID is required.</div>
+            )}
+            <div className="registration-form-actions">
+              <button className="button button-outline" type="button" disabled={submitting} onClick={() => setStep(1)}>Back to Details</button>
+              <button className="button button-primary" type="submit" disabled={submitting}>{submitting ? 'Completing registration…' : 'Complete Registration'}</button>
+            </div>
+          </form>
+          <aside className="registration-summary-card">
+            <span className="registration-label">REGISTRATION SUMMARY</span>
+            <h2>{event.title}</h2>
+            <div><span>Participant fee</span><strong>{formatFee(participantFee)}</strong></div>
+            {bringingGuests && <div><span>Total guest fee</span><strong>{formatFee(guestFeeTotal)}</strong></div>}
+            <div className="summary-fee"><span>Total payable</span><strong>{formatFee(grandTotal)}</strong></div>
+          </aside>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="container registration-page">
       <a className="back-link registration-back-link" href={`/events/${encodeURIComponent(event.slug)}`}><span aria-hidden="true">←</span> Event details</a>
@@ -395,10 +544,14 @@ function EventRegistration({ slug }) {
         <h1>Register for {event.title}</h1>
         <p>{formatEventDateTime(event.event_start)} · {event.venue}</p>
       </div>
+      <div className="registration-progress" aria-label="Registration progress">
+        <span className="active">Step 1: Participant &amp; Guests</span>
+        <span>Step 2: Payment</span>
+      </div>
       {(error || lookupError) && <div className="form-feedback" role="alert">{error || lookupError}</div>}
       {formConfigurationError && <div className="form-feedback" role="alert">{formConfigurationError}</div>}
       <div className="registration-form-layout">
-        <form className="registration-form" onSubmit={handleSubmit} noValidate>
+        <form className="registration-form" onSubmit={handleContinue} noValidate>
           <div className="registration-form-section">
             <h2>Your details</h2>
             <div className="form-grid">
@@ -528,7 +681,7 @@ function EventRegistration({ slug }) {
           )}
 
           <button className="button button-primary button-wide auth-submit" type="submit" disabled={submitting || allLookupsLoading || Boolean(formConfigurationError) || !institutions.length || !departments.length}>
-            {submitting ? 'Submitting registration…' : 'Confirm registration'} {!submitting && <Icon name="arrow" size={18} />}
+            Continue to Payment {!submitting && <Icon name="arrow" size={18} />}
           </button>
         </form>
 

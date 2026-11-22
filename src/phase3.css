@@ -166,6 +166,65 @@
   color: var(--muted);
 }
 
+.registration-progress {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.registration-progress span {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.registration-progress span.active {
+  border-color: #b7c7bc;
+  background: var(--soft-green);
+  color: var(--green);
+}
+
+.registration-progress span.complete {
+  border-color: #d3e2d6;
+  color: var(--green);
+}
+
+.registration-review-list {
+  margin: 0;
+}
+
+.registration-review-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.registration-review-list dt,
+.registration-review-list dd {
+  margin: 0;
+}
+
+.registration-review-list dd {
+  text-align: right;
+  font-weight: 700;
+}
+
+.registration-form-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
 .registration-form-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(270px, 0.8fr);

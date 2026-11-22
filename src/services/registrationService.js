@@ -91,6 +91,66 @@ export async function registerForEvent(registrationData) {
   return registration
 }
 
+export async function completeEventRegistration(registrationData) {
+  const userId = await getCurrentUserId()
+  const file = registrationData.file
+  if (!globalThis.crypto?.randomUUID) {
+    throw new Error('Secure file naming is unavailable in this browser. Update your browser and try again.')
+  }
+  const idempotencyKey = registrationData.idempotencyKey || globalThis.crypto.randomUUID()
+  const client = getSupabaseClient()
+  let path = null
+  let storage = null
+
+  if (!registrationData.isFree) {
+    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      throw new Error('Choose a JPG, PNG, or WEBP payment screenshot.')
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('The payment screenshot must be 5 MB or smaller.')
+    }
+    if (!globalThis.crypto?.randomUUID) {
+      throw new Error('Secure file naming is unavailable in this browser. Update your browser and try again.')
+    }
+
+    const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+    path = `${userId}/pending/${idempotencyKey}.${extensions[file.type]}`
+    storage = client.storage.from('evently-payment-proofs')
+    const { error: uploadError } = await storage.upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: false,
+    })
+    if (uploadError) throw uploadError
+  }
+
+  const { data, error } = await client.rpc('complete_event_registration_with_payment', {
+    p_event_id: Number(registrationData.event_id),
+    p_full_name: registrationData.full_name.trim(),
+    p_email: registrationData.email.trim().toLowerCase(),
+    p_phone: registrationData.phone.trim(),
+    p_participant_type: registrationData.participant_type,
+    p_institution_id: Number(registrationData.institution_id),
+    p_department_id: registrationData.department_id ? Number(registrationData.department_id) : null,
+    p_identity_number: registrationData.identity_number.trim(),
+    p_form_answers: registrationData.form_answers || {},
+    p_guests: registrationData.guests || [],
+    p_payment_method: registrationData.payment_method,
+    p_transaction_id: String(registrationData.transaction_id || '').trim(),
+    p_sender_phone: String(registrationData.sender_phone || '').trim() || null,
+    p_payment_note: String(registrationData.payment_note || '').trim() || null,
+    p_screenshot_path: path,
+    p_idempotency_key: idempotencyKey,
+  })
+  if (error) {
+    if (storage && path) await storage.remove([path])
+    throw error
+  }
+  const result = Array.isArray(data) ? data[0] : data
+  if (!result?.registration_id) throw new Error('The database did not confirm the completed registration.')
+  return result
+}
+
 export async function getMyRegistrations() {
   const userId = await getCurrentUserId()
   const { data, error } = await getSupabaseClient()
@@ -111,7 +171,8 @@ export async function getMyRegisteredEventDetails() {
 
 export async function getRegistrationByEvent(eventId) {
   const userId = await getCurrentUserId()
-  const { data, error } = await getSupabaseClient()
+  const client = getSupabaseClient()
+  const { data, error } = await client
     .from('event_registrations')
     .select(REGISTRATION_COLUMNS)
     .eq('event_id', eventId)
@@ -119,7 +180,18 @@ export async function getRegistrationByEvent(eventId) {
     .maybeSingle()
 
   if (error) throw error
-  return data
+  if (!data) return null
+  if (Number(data.fee_amount) <= 0) return data
+
+  // Paid rows with no payment submission are abandoned pre-payment registrations
+  // from the old registration-first flow, not submitted registrations.
+  const { data: payments, error: paymentError } = await client
+    .from('event_payment_submissions')
+    .select('id')
+    .eq('registration_id', data.id)
+    .limit(1)
+  if (paymentError) throw paymentError
+  return payments?.length ? data : null
 }
 
 export async function getEventRegistrations(eventId) {
