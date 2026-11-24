@@ -3,10 +3,13 @@ import { BrowserQRCodeReader } from '@zxing/browser'
 import { useAuth } from '../../context/useAuth.js'
 import { formatEventDateTime } from '../../lib/eventUtils.js'
 import {
+  getAdminDistributionItems,
   getMyDistributionItems,
   recordContinuousAttendeeDistribution,
 } from '../../services/distributionService.js'
+import { getAdminEvents } from '../../services/eventService.js'
 import {
+  checkInEventTicket,
   getTicketScannerEvents,
   validateAttendeeTicket,
 } from '../../services/ticketService.js'
@@ -34,13 +37,15 @@ function TicketScanner({
   const [error, setError] = useState('')
   const [cameraError, setCameraError] = useState('')
   const [assignedItems, setAssignedItems] = useState([])
+  const [loadingItems, setLoadingItems] = useState(workflow === 'distribution')
   const [selectedItemIds, setSelectedItemIds] = useState([])
   const [continuousResult, setContinuousResult] = useState([])
   const [continuousSessionActive, setContinuousSessionActive] = useState(false)
+  const [scanMode, setScanMode] = useState(workflow)
   const isSuperAdmin = roles.includes('super_admin')
-  const isDistributionMode = workflow === 'distribution'
-  const isVolunteerDistribution = isDistributionMode && (volunteerWorkspace || !isSuperAdmin)
-  const hasDistributionViews = isDistributionMode && volunteerWorkspace
+  const isDistributionMode = scanMode === 'distribution'
+  const isVolunteerDistribution = isDistributionMode && !isSuperAdmin
+  const hasDistributionViews = isDistributionMode && volunteerWorkspace && !isSuperAdmin
 
   useEffect(() => {
     if (hasDistributionViews && continuousSessionActive) {
@@ -60,10 +65,21 @@ function TicketScanner({
     setResult(null)
     try {
       const privateToken = String(value || '').trim()
-      if (!continuousSessionActive || selectedItemIds.length === 0) {
-        throw new Error('Select assigned items and start scanning before scanning a participant.')
+      if (isDistributionMode && (!continuousSessionActive || selectedItemIds.length === 0)) {
+        throw new Error(`Select ${isSuperAdmin ? 'active' : 'assigned'} items and start scanning before scanning a participant.`)
       }
       setContinuousResult([])
+      if (!isDistributionMode) {
+        const checkInResult = await checkInEventTicket({ eventId, token: privateToken })
+        setResult({
+          ...checkInResult,
+          event_title: checkInResult.event_title || events.find((event) => String(event.event_id) === eventId)?.event_title,
+          participant_name: checkInResult.participant_name || checkInResult.attendee_name || 'Unknown attendee',
+          result_message: checkInResult.result_message || 'The ticket check-in result was received.',
+        })
+        setToken('')
+        return
+      }
       const resolvedTicket = await validateAttendeeTicket({ eventId, token: privateToken })
       const rows = await recordContinuousAttendeeDistribution({
         eventId,
@@ -92,11 +108,20 @@ function TicketScanner({
     } finally {
       setChecking(false)
     }
-  }, [eventId, events, continuousSessionActive, selectedItemIds])
+  }, [eventId, events, continuousSessionActive, selectedItemIds, isDistributionMode, isSuperAdmin])
 
   useEffect(() => {
     let active = true
-    getTicketScannerEvents()
+    const eventRequest = isSuperAdmin
+      ? getAdminEvents().then((items) => items.map((item) => ({
+          event_id: item.id,
+          event_title: item.title,
+          event_start: item.event_start,
+          venue: item.venue,
+          event_status: item.status,
+        })))
+      : getTicketScannerEvents()
+    eventRequest
       .then((items) => {
         if (!active) return
         setEvents(items)
@@ -107,7 +132,9 @@ function TicketScanner({
         }
       })
       .catch((loadError) => {
-        if (active) setError(loadError.message || 'Authorized event assignments could not be loaded.')
+        if (active) {
+          setError(loadError.message || (isSuperAdmin ? 'Events could not be loaded.' : 'Authorized event assignments could not be loaded.'))
+        }
       })
       .finally(() => {
         if (active) setLoadingEvents(false)
@@ -115,25 +142,31 @@ function TicketScanner({
     return () => {
       active = false
     }
-  }, [])
+  }, [isSuperAdmin])
 
   useEffect(() => {
-    if (!isDistributionMode || !eventId) {
-      return undefined
-    }
+    if (!isDistributionMode || !eventId) return undefined
     let active = true
-    getMyDistributionItems()
+    const itemsRequest = isSuperAdmin
+      ? getAdminDistributionItems(eventId)
+      : getMyDistributionItems()
+    itemsRequest
       .then((items) => {
         if (!active) return
-        setAssignedItems(items.filter((item) => String(item.event_id) === String(eventId)))
+        setAssignedItems(items.filter((item) => (
+          String(item.event_id) === String(eventId) && (!isSuperAdmin || item.is_active)
+        )))
       })
       .catch((loadError) => {
-        if (active) setDistributionError(loadError.message || 'Assigned items could not be loaded.')
+        if (active) setDistributionError(loadError.message || `${isSuperAdmin ? 'Active' : 'Assigned'} items could not be loaded.`)
+      })
+      .finally(() => {
+        if (active) setLoadingItems(false)
       })
     return () => {
       active = false
     }
-  }, [eventId, isDistributionMode])
+  }, [eventId, isDistributionMode, isSuperAdmin])
 
   useEffect(() => {
     if (!cameraActive || !videoRef.current || !eventId) return undefined
@@ -202,7 +235,7 @@ function TicketScanner({
 
   const startContinuousSession = () => {
     if (!selectedItemIds.length) {
-      setDistributionError('Select at least one assigned item before starting scanning.')
+      setDistributionError(`Select at least one ${isSuperAdmin ? 'active item' : 'assigned item'} before starting scanning.`)
       return
     }
     setContinuousSessionActive(true)
@@ -224,6 +257,22 @@ function TicketScanner({
     setContinuousSessionActive(false)
     setContinuousResult([])
     setResult(null)
+    setDistributionSuccess('')
+  }
+
+  const changeScanMode = (mode) => {
+    if (checking) return
+    stopCamera()
+    setScanMode(mode)
+    setToken('')
+    setAssignedItems([])
+    setLoadingItems(mode === 'distribution')
+    setContinuousSessionActive(false)
+    setSelectedItemIds([])
+    setContinuousResult([])
+    setResult(null)
+    setError('')
+    setDistributionError('')
     setDistributionSuccess('')
   }
 
@@ -293,23 +342,29 @@ function TicketScanner({
         <input value={token} onChange={(event) => setToken(event.target.value)} maxLength={128} autoComplete="off" spellCheck="false" placeholder="Enter the token from the ticket QR" />
       </label>
       <button className="button button-outline" type="submit" disabled={!eventId || checking || (isDistributionMode && !continuousSessionActive)}>
-        {checking ? 'Checking ticket…' : 'Validate ticket'}
+        {checking ? 'Checking ticket…' : isDistributionMode ? 'Validate ticket' : 'Check in ticket'}
       </button>
     </form>
   )
   const validationResultPanel = (result || !isVolunteerDistribution) && (
     <aside className={`ticket-validation-result${result ? ` is-${statusClass}` : ''}`} aria-live="polite">
       {!result
-        ? <><span className="eyebrow">VALIDATION RESULT</span><h2>Ready to scan</h2><p>Select the assigned event and items before scanning a participant ticket.</p></>
+        ? <><span className="eyebrow">VALIDATION RESULT</span><h2>Ready to scan</h2><p>{isDistributionMode
+          ? `Select an event and ${isSuperAdmin ? 'active items' : 'assigned items'} before scanning a participant ticket.`
+          : 'Select an event, then scan or enter a ticket to check the participant in.'}</p></>
         : <>
             <span className="ticket-result-code">{result.result_code.replace('_', ' ')}</span>
-            <h2>{result.result_code === 'VALID'
-              ? 'Ticket valid'
-              : result.result_code === 'DISTRIBUTION_COMPLETE'
+            <h2>{isDistributionMode
+              ? result.result_code === 'DISTRIBUTION_COMPLETE'
                 ? 'Distribution complete'
                 : result.result_code === 'ALREADY_RECEIVED'
                   ? 'Already received'
-                  : 'Invalid ticket'}</h2>
+                  : 'Invalid ticket'
+              : String(result.result_code || '').toLowerCase().includes('already')
+                ? 'Already checked in'
+                  : ['valid', 'checked_in', 'check_in_success'].some((code) => String(result.result_code || '').toLowerCase().includes(code))
+                  ? 'Ticket checked in'
+                  : 'Ticket not checked in'}</h2>
             <p>{result.result_message}</p>
             {result.event_title && <dl className="ticket-result-details">
               <div><dt>Event</dt><dd>{result.event_title}</dd></div>
@@ -331,10 +386,21 @@ function TicketScanner({
               <a className="back-link" href={isSuperAdmin ? '/admin/tickets' : '/volunteer'}>← {isSuperAdmin ? 'Ticket management' : 'Volunteer workspace'}</a>
               <span className="eyebrow">{isDistributionMode ? 'ITEM DISTRIBUTION' : 'EVENT ENTRY'}</span>
               <h1>{isDistributionMode ? 'Item distribution' : 'Ticket scanner'}</h1>
-              <p>Scan an eligible ticket to distribute only the items assigned to you. Distribution does not check the participant in.</p>
+              <p>{isSuperAdmin
+                ? isDistributionMode
+                  ? 'Select any active items for the event to distribute. Super Admins do not need volunteer assignments.'
+                  : 'Scan or enter a ticket to check a participant in directly for the selected event.'
+                : 'Scan an eligible ticket to distribute only the items assigned to you. Distribution does not check the participant in.'}</p>
             </div>
             {isSuperAdmin && <a className="button button-outline" href="/admin">Admin overview</a>}
           </div>}
+
+      {isSuperAdmin && (
+        <div className="admin-filter-tabs ticket-scanner-mode-tabs" role="group" aria-label="Scanner task">
+          <button type="button" className={isDistributionMode ? 'active' : ''} onClick={() => changeScanMode('distribution')} disabled={checking}>Item distribution</button>
+          <button type="button" className={!isDistributionMode ? 'active' : ''} onClick={() => changeScanMode('checkin')} disabled={checking}>Ticket check-in</button>
+        </div>
+      )}
 
       {error && <div className="form-feedback" role="alert">{error}</div>}
       <div className={`ticket-scanner-layout${isVolunteerDistribution ? ` volunteer-distribution-workspace${hasDistributionViews ? ` is-view-${distributionView}` : ''}` : ''}`}>
@@ -346,9 +412,9 @@ function TicketScanner({
         >
           <label className="form-field">
             <span>Event</span>
-            <select value={eventId} onChange={(event) => { setEventId(event.target.value); setResult(null); setError(''); setDistributionError(''); setContinuousSessionActive(false); setSelectedItemIds([]); setContinuousResult([]) }} disabled={loadingEvents || !events.length || checking}>
-              {loadingEvents && <option value="">Loading authorized events…</option>}
-              {!loadingEvents && !events.length && <option value="">No assigned events available</option>}
+            <select value={eventId} onChange={(event) => { setEventId(event.target.value); setToken(''); setResult(null); setError(''); setDistributionError(''); setContinuousSessionActive(false); setSelectedItemIds([]); setContinuousResult([]); setAssignedItems([]); setLoadingItems(isDistributionMode); stopCamera() }} disabled={loadingEvents || !events.length || checking}>
+              {loadingEvents && <option value="">Loading {isSuperAdmin ? 'events' : 'authorized events'}…</option>}
+              {!loadingEvents && !events.length && <option value="">{isSuperAdmin ? 'No events available' : 'No assigned events available'}</option>}
               {events.map((event) => <option value={event.event_id} key={event.event_id}>{event.event_title}</option>)}
             </select>
           </label>
@@ -362,13 +428,14 @@ function TicketScanner({
             <section className="continuous-item-selection" aria-label="Distribution item selection">
               <div className="continuous-section-heading">
                 <div>
-                  <span className="eyebrow">ASSIGNED ITEMS</span>
+                  <span className="eyebrow">{isSuperAdmin ? 'ACTIVE ITEMS' : 'ASSIGNED ITEMS'}</span>
                   <strong>{selectedItemIds.length} selected</strong>
                 </div>
                 {continuousSessionActive && <span className="continuous-session-active">Session active</span>}
               </div>
               {distributionError && <p className="form-feedback" role="alert">{distributionError}</p>}
               {distributionSuccess && <p className="inline-notice" role="status">{distributionSuccess}</p>}
+              {loadingItems && eventId && <p className="admin-muted" role="status">Loading {isSuperAdmin ? 'active' : 'assigned'} items…</p>}
               <div className="continuous-item-grid">
                 {assignedItems.map((item) => {
                   const selected = selectedItemIds.includes(item.item_id)
@@ -388,7 +455,7 @@ function TicketScanner({
                   )
                 })}
               </div>
-              {!assignedItems.length && <p className="admin-muted">No active item assignments are available for this event.</p>}
+              {!loadingItems && eventId && !assignedItems.length && <p className="admin-muted">{isSuperAdmin ? 'No active distribution items are available for this event.' : 'No active item assignments are available for this event.'}</p>}
               <div className="continuous-session-actions">
                 {!continuousSessionActive
                   ? <button className="button button-primary" type="button" disabled={!selectedItemIds.length} onClick={startContinuousSession}>{isVolunteerDistribution ? 'Start Distribution Session' : 'Start Scanning'}</button>
@@ -418,7 +485,10 @@ function TicketScanner({
         {!isVolunteerDistribution && validationResultPanel}
       </div>
       {!isVolunteerDistribution && distributionResults}
-      {!loadingEvents && events.length === 0 && <div className="empty-state"><h2>No events assigned</h2><p>Ticket scanning is limited to event assignments. Ask a Super Admin to assign you to an event.</p></div>}
+      {!loadingEvents && events.length === 0 && <div className="empty-state">
+        <h2>{isSuperAdmin ? 'No events available' : 'No events assigned'}</h2>
+        <p>{isSuperAdmin ? 'There are no events available to scan.' : 'Ticket scanning is limited to event assignments. Ask a Super Admin to assign you to an event.'}</p>
+      </div>}
     </section>
   )
 }

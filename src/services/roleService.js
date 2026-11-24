@@ -49,3 +49,12 @@ export async function setVolunteerRole({ userId, active }) {
   })
   if (error) throw error
 }
+
+export async function setSuperAdminRole({ userId, makeAdmin }) {
+  await requireSuperAdmin()
+  const { error } = await getSupabaseClient().rpc('set_user_super_admin_role', {
+    p_target_user_id: userId,
+    p_make_admin: Boolean(makeAdmin),
+  })
+  if (error) throw error
+}

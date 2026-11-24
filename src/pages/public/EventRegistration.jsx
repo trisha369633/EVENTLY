@@ -10,7 +10,7 @@ import {
 } from '../../services/eventService.js'
 import { getUserIdentity } from '../../services/identityService.js'
 import { getProfile, listDepartments, listInstitutions } from '../../services/profileService.js'
-import { completeEventRegistration, getRegistrationByEvent } from '../../services/registrationService.js'
+import { completeEventRegistration, getRegistrationByEvent, registerForEvent } from '../../services/registrationService.js'
 
 const participantTypes = ['student', 'teacher', 'alumni']
 
@@ -88,6 +88,14 @@ function EventRegistration({ slug }) {
   const [paymentNote, setPaymentNote] = useState('')
   const [paymentFile, setPaymentFile] = useState(null)
   const [idempotencyKey, setIdempotencyKey] = useState('')
+  const [copiedPaymentAccount, setCopiedPaymentAccount] = useState(null)
+  const [paymentCopyError, setPaymentCopyError] = useState('')
+
+  useEffect(() => {
+    if (copiedPaymentAccount === null) return undefined
+    const timeout = window.setTimeout(() => setCopiedPaymentAccount(null), 1500)
+    return () => window.clearTimeout(timeout)
+  }, [copiedPaymentAccount])
 
   useEffect(() => {
     let active = true
@@ -277,6 +285,17 @@ function EventRegistration({ slug }) {
     }
   }
 
+  const copyPaymentAccount = async (number, index) => {
+    setPaymentCopyError('')
+    setCopiedPaymentAccount(null)
+    try {
+      await navigator.clipboard.writeText(number)
+      setCopiedPaymentAccount({ index })
+    } catch {
+      setPaymentCopyError('Copy was unavailable. Select and copy the payment number manually.')
+    }
+  }
+
   const validate = () => {
     const nextErrors = {}
     for (const [key, label] of [
@@ -299,21 +318,15 @@ function EventRegistration({ slug }) {
       nextErrors.department_id = 'Select an active department.'
     }
     customFields.forEach((field) => {
-      const answer = answers[field.name]
+      const answer = answers[field.id]
       if (field.required && (field.type === 'checkbox' ? answer !== true : !String(answer ?? '').trim())) {
-        nextErrors[`custom:${field.name}`] = `${field.label} is required.`
+        nextErrors[`custom:${field.id}`] = `${field.label} is required.`
       }
       if (field.type === 'number' && answer !== '' && answer !== undefined && !Number.isFinite(Number(answer))) {
-        nextErrors[`custom:${field.name}`] = `Enter a valid number for ${field.label}.`
+        nextErrors[`custom:${field.id}`] = `Enter a valid number for ${field.label}.`
       }
-      if (field.type === 'email' && answer && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(answer))) {
-        nextErrors[`custom:${field.name}`] = `Enter a valid email address for ${field.label}.`
-      }
-      if (field.type === 'dropdown' && answer && !field.options.some((option) => option.value === answer)) {
-        nextErrors[`custom:${field.name}`] = `Choose a valid option for ${field.label}.`
-      }
-      if (field.type === 'radio' && answer && !field.options.some((option) => option.value === answer)) {
-        nextErrors[`custom:${field.name}`] = `Choose a valid option for ${field.label}.`
+      if (field.type === 'select' && answer && !field.options.includes(answer)) {
+        nextErrors[`custom:${field.id}`] = `Choose a valid option for ${field.label}.`
       }
     })
     if (bringingGuests) {
@@ -387,9 +400,7 @@ function EventRegistration({ slug }) {
     setSubmitting(true)
     setError('')
     try {
-      const key = idempotencyKey || globalThis.crypto.randomUUID()
-      if (!idempotencyKey) setIdempotencyKey(key)
-      const result = await completeEventRegistration({
+      const registrationData = {
         event_id: event.id,
         ...values,
         form_answers: answers,
@@ -398,14 +409,24 @@ function EventRegistration({ slug }) {
           relationship: guest.relationship,
           child_age_category: guest.relationship === 'child' ? guest.child_age_category : null,
         })) : [],
-        payment_method: paymentMethod,
-        transaction_id: transactionId,
-        sender_phone: senderPhone,
-        payment_note: paymentNote,
-        file: paymentFile,
-        idempotencyKey: key,
-        isFree: grandTotal <= 0,
-      })
+      }
+      let result
+      if (grandTotal <= 0) {
+        result = await registerForEvent(registrationData)
+      } else {
+        const key = idempotencyKey || globalThis.crypto.randomUUID()
+        if (!idempotencyKey) setIdempotencyKey(key)
+        result = await completeEventRegistration({
+          ...registrationData,
+          payment_method: paymentMethod,
+          transaction_id: transactionId,
+          sender_phone: senderPhone,
+          payment_note: paymentNote,
+          file: paymentFile,
+          idempotencyKey: key,
+          isFree: false,
+        })
+      }
       if (Number(result.registration_fee_amount) > 0 || Number(result.fee_amount) > 0) {
         sessionStorage.removeItem(`evently-registration-draft:${user.id}:${event.id}`)
         navigate(`/payments/${result.registration_id || result.id}`, { replace: true })
@@ -476,6 +497,9 @@ function EventRegistration({ slug }) {
   ))
   const guestFeeTotal = selectedGuestFees.reduce((total, fee) => total + Number(fee), 0)
   const grandTotal = (Number(participantFee) || 0) + guestFeeTotal
+  const paymentAccounts = Array.isArray(event.payment_accounts)
+    ? event.payment_accounts.filter((account) => account && String(account.number || '').trim())
+    : []
 
   if (step === 2) {
     return (
@@ -514,6 +538,31 @@ function EventRegistration({ slug }) {
               <div className="registration-form-section">
                 <h2>Payment details</h2>
                 <p>Send the exact total of <strong>{formatFee(grandTotal)}</strong> to an Evently payment number.</p>
+                {paymentAccounts.length > 0 && (
+                  <ul className="registration-payment-account-list" aria-label="Event payment receiving numbers">
+                    {paymentAccounts.map((account, index) => {
+                      const number = String(account.number).trim()
+                      const note = typeof account.note === 'string' ? account.note.trim() : ''
+                      return (
+                        <li className="registration-payment-account" key={`${number}-${index}`}>
+                          <span className="registration-payment-account-details">
+                            <strong>{number}</strong>
+                            {note && <span>— {note}</span>}
+                          </span>
+                          <button
+                            className="registration-payment-copy"
+                            type="button"
+                            aria-label={`Copy payment number ${number}`}
+                            onClick={() => void copyPaymentAccount(number, index)}
+                          >
+                            {copiedPaymentAccount?.index === index ? 'Copied' : 'Copy'}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                {paymentCopyError && <p className="registration-payment-copy-error" role="alert">{paymentCopyError}</p>}
                 <div className="form-grid">
                   <label className="form-field"><span>Payment method</span><select value={paymentMethod} onChange={(changeEvent) => setPaymentMethod(changeEvent.target.value)}><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="other">Other</option></select></label>
                   <label className="form-field"><span>Transaction ID</span><input value={transactionId} onChange={(changeEvent) => setTransactionId(changeEvent.target.value)} required maxLength="128" /></label>
@@ -576,34 +625,21 @@ function EventRegistration({ slug }) {
               <h2>Additional information</h2>
               <div className="form-grid">
                 {customFields.map((field) => {
-                  const errorKey = `custom:${field.name}`
+                  const errorKey = `custom:${field.id}`
                   const update = (value) => {
-                    setAnswers((current) => ({ ...current, [field.name]: value }))
+                    setAnswers((current) => ({ ...current, [field.id]: value }))
                     setErrors((current) => ({ ...current, [errorKey]: '' }))
                   }
                   if (field.type === 'checkbox') {
-                    return <label className="form-field custom-checkbox-field" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><input type="checkbox" checked={Boolean(answers[field.name])} onChange={(event) => update(event.target.checked)} aria-invalid={Boolean(errors[errorKey])} />{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
+                    return <label className="form-field custom-checkbox-field" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><input type="checkbox" checked={Boolean(answers[field.id])} onChange={(event) => update(event.target.checked)} aria-invalid={Boolean(errors[errorKey])} />{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
                   }
                   if (field.type === 'textarea') {
-                    return <label className="form-field form-field-full" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><textarea rows="4" value={answers[field.name] || ''} onChange={(event) => update(event.target.value)} aria-invalid={Boolean(errors[errorKey])} />{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
+                    return <label className="form-field form-field-full" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><textarea rows="4" value={answers[field.id] ?? ''} onChange={(event) => update(event.target.value)} aria-invalid={Boolean(errors[errorKey])} />{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
                   }
-                  if (field.type === 'dropdown') {
-                    return <label className="form-field" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><select value={answers[field.name] || ''} onChange={(event) => update(event.target.value)} aria-invalid={Boolean(errors[errorKey])}><option value="">Select an option</option>{field.options.map((option) => <option key={`${field.id}-${option.value}`} value={option.value}>{option.label}</option>)}</select>{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
+                  if (field.type === 'select') {
+                    return <label className="form-field" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><select value={answers[field.id] ?? ''} onChange={(event) => update(event.target.value)} aria-invalid={Boolean(errors[errorKey])}><option value="">Select an option</option>{field.options.map((option) => <option key={`${field.id}-${option}`} value={option}>{option}</option>)}</select>{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
                   }
-                  if (field.type === 'radio') {
-                    return <fieldset className="form-field form-field-full custom-radio-field" key={field.id} aria-invalid={Boolean(errors[errorKey])}>
-                      <legend>{field.label}{field.required ? ' *' : ''}</legend>
-                      <div className="custom-radio-options">{field.options.map((option) => (
-                        <label key={`${field.id}-${option.value}`}>
-                          <input type="radio" name={`custom-${field.name}`} value={option.value} checked={answers[field.name] === option.value} onChange={() => update(option.value)} />
-                          <span>{option.label}</span>
-                        </label>
-                      ))}</div>
-                      {errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}
-                    </fieldset>
-                  }
-                  const type = field.type === 'phone' ? 'tel' : field.type
-                  return <label className="form-field" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><input type={type} value={answers[field.name] || ''} onChange={(event) => update(event.target.value)} aria-invalid={Boolean(errors[errorKey])} />{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
+                  return <label className="form-field" key={field.id}><span>{field.label}{field.required ? ' *' : ''}</span><input type={field.type} value={answers[field.id] ?? ''} onChange={(event) => update(event.target.value)} aria-invalid={Boolean(errors[errorKey])} />{errors[errorKey] && <small className="field-error">{errors[errorKey]}</small>}</label>
                 })}
               </div>
             </div>

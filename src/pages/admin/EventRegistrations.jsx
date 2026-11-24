@@ -55,6 +55,10 @@ function EventRegistrations({ eventId }) {
   }, [eventId])
 
   const visibleRegistrations = registrations.filter((item) => filter === 'all' || item.registration_status === filter)
+  const customFieldLabels = new Map((event?.custom_form_fields || []).flatMap((field) => [
+    [field.id, field.label || field.title || field.id],
+    ...(field.name ? [[field.name, field.label || field.title || field.name]] : []),
+  ]))
 
   return (
     <section className="admin-page">
@@ -86,8 +90,8 @@ function EventRegistrations({ eventId }) {
                       <td>{formatFee(registration.fee_amount)}</td>
                       <td><StatusBadge status={registration.registration_status} /></td>
                       <td>{formatEventDate(registration.registered_at, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                      <td>{Object.keys(registration.form_answers || {}).length
-                        ? <details className="answers-details"><summary>View answers</summary><dl>{Object.entries(registration.form_answers).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{typeof value === 'boolean' ? value ? 'Yes' : 'No' : String(value)}</dd></div>)}</dl></details>
+                      <td>{Object.entries(registration.form_answers || {}).some(([, value]) => value !== null && value !== undefined && value !== false && String(value).trim() !== '')
+                        ? <details className="answers-details"><summary>View answers</summary><dl>{Object.entries(registration.form_answers).filter(([, value]) => value !== null && value !== undefined && value !== false && String(value).trim() !== '').map(([key, value]) => <div key={key}><dt>{customFieldLabels.get(key) || key}</dt><dd>{value === true ? 'Yes' : String(value)}</dd></div>)}</dl></details>
                         : '—'}</td>
                     </tr>
                   ))}

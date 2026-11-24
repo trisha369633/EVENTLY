@@ -150,6 +150,11 @@ export function AuthProvider({ children }) {
     return nextProfile
   }, [user])
 
+  const updateParticipantProfile = useCallback((nextProfile, nextParticipantType) => {
+    setProfile((current) => current ? { ...current, ...nextProfile } : nextProfile)
+    setParticipantType(nextParticipantType || null)
+  }, [])
+
   const refreshPermissions = useCallback(async () => {
     if (!user) return { roles: [], participantType: null }
     const [nextRoles, identity] = await Promise.all([
@@ -185,6 +190,7 @@ export function AuthProvider({ children }) {
     signInWithId,
     signOut: logOut,
     refreshUserProfile,
+    updateParticipantProfile,
     refreshPermissions,
   }), [
     session,
@@ -199,6 +205,7 @@ export function AuthProvider({ children }) {
     signInWithId,
     logOut,
     refreshUserProfile,
+    updateParticipantProfile,
     refreshPermissions,
   ])
 

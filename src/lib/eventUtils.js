@@ -79,44 +79,50 @@ export function slugify(value) {
 function normalizeOptions(options) {
   if (!Array.isArray(options)) return []
   return options.map((option) => {
-    if (typeof option === 'string') return { label: option, value: option }
-    if (option && typeof option === 'object' && typeof option.label === 'string') {
-      return { label: option.label, value: String(option.value ?? option.label) }
+    if (typeof option === 'string') return option.trim()
+    if (option && typeof option === 'object') {
+      return String(option.label ?? option.value ?? '').trim()
     }
-    throw new Error('An event form dropdown has an invalid option.')
-  })
+    throw new Error('An event form select has an invalid option.')
+  }).filter(Boolean)
 }
 
 export function normalizeCustomFields(value) {
   if (value === null || value === undefined) return []
   if (!Array.isArray(value)) throw new Error('This event has an invalid additional-form configuration.')
 
+  const allowedTypes = new Set(['text', 'textarea', 'number', 'select', 'checkbox'])
+  const legacyTypes = { dropdown: 'select', radio: 'select', email: 'text', phone: 'text' }
+  const usedIds = new Set()
   const fields = value.map((field, index) => {
     if (!field || typeof field !== 'object' || Array.isArray(field)) {
       throw new Error('This event has an invalid additional-form field.')
     }
     const label = String(field.label || field.title || '').trim()
-    const type = String(field.type || 'text').toLowerCase()
-    const name = String(field.name || field.key || field.id || slugify(label)).trim()
-    const allowedTypes = new Set(['text', 'number', 'email', 'phone', 'dropdown', 'radio', 'textarea', 'checkbox'])
-    if (!label || !name || !allowedTypes.has(type)) {
+    const storedType = String(field.type || 'text').toLowerCase()
+    const type = legacyTypes[storedType] || storedType
+    const baseId = String(field.id || slugify(label) || `field-${index + 1}`).trim()
+    if (!label || !baseId || !allowedTypes.has(type)) {
       throw new Error('This event has an unsupported additional-form field.')
     }
-    const options = normalizeOptions(field.options)
-    if (['dropdown', 'radio'].includes(type) && !options.length) {
+    let id = baseId
+    let suffix = 2
+    while (usedIds.has(id)) {
+      id = `${baseId}-${suffix}`
+      suffix += 1
+    }
+    usedIds.add(id)
+    const options = type === 'select' ? normalizeOptions(field.options) : []
+    if (type === 'select' && !options.length) {
       throw new Error(`“${label}” has no options configured.`)
     }
     return {
-      name,
+      id,
       label,
       type,
       required: field.required === true,
       options,
-      id: String(field.id || `${name}-${index}`),
     }
   })
-  if (new Set(fields.map((field) => field.name)).size !== fields.length) {
-    throw new Error('This event has duplicate additional-form field names.')
-  }
   return fields
 }

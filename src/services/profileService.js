@@ -35,6 +35,47 @@ export async function listDepartments(institutionId) {
   return data
 }
 
+export async function getParticipantProfileEditorData(userId) {
+  const client = getSupabaseClient()
+  const [profileResult, identityResult, institutionsResult, departmentsResult] = await Promise.all([
+    client.from('profiles').select('id, full_name, email, phone').eq('id', userId).maybeSingle(),
+    client.from('user_identities')
+      .select('id, identity_type, institution_id, department_id, identity_number, is_verified')
+      .eq('user_id', userId)
+      .maybeSingle(),
+    client.from('institutions').select('id, name').eq('is_active', true).order('name'),
+    client.from('departments')
+      .select('id, institution_id, name, code')
+      .eq('is_active', true)
+      .order('name'),
+  ])
+
+  if (profileResult.error) throw profileResult.error
+  if (identityResult.error) throw identityResult.error
+  if (institutionsResult.error) throw institutionsResult.error
+  if (departmentsResult.error) throw departmentsResult.error
+
+  return {
+    profile: profileResult.data,
+    identity: identityResult.data,
+    institutions: institutionsResult.data || [],
+    departments: departmentsResult.data || [],
+  }
+}
+
+export async function saveParticipantProfileIdentity(input) {
+  const { error } = await getSupabaseClient().rpc('upsert_my_participant_profile_identity', {
+    p_full_name: input.full_name.trim(),
+    p_phone: input.phone.trim() || null,
+    p_identity_type: input.identity_type || null,
+    p_institution_id: input.institution_id || null,
+    p_department_id: input.department_id || null,
+    p_identity_number: input.identity_number.trim() || null,
+  })
+
+  if (error) throw error
+}
+
 export async function getAdminOrganizationLabels(institutionIds, departmentIds) {
   await requireSuperAdmin()
   const client = getSupabaseClient()

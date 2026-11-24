@@ -21,6 +21,7 @@ const EVENT_COLUMNS = [
   'seat_limit',
   'status',
   'custom_form_fields',
+  'payment_accounts',
   'created_by',
   'created_at',
   'updated_at',

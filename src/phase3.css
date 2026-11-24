@@ -772,6 +772,97 @@
   color: #a53d36;
 }
 
+.payment-accounts-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.payment-account-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.payment-account-form-row:first-of-type {
+  margin-top: 0;
+}
+
+.payment-account-remove {
+  min-height: 40px;
+  justify-self: start;
+  color: #64766a;
+  font-size: 12px;
+}
+
+.registration-payment-account-list {
+  display: grid;
+  margin: 12px 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.registration-payment-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid #e8eee8;
+}
+
+.registration-payment-account-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.registration-payment-account-details strong {
+  color: var(--green-dark);
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.registration-payment-account-details > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.registration-payment-copy {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--green);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.registration-payment-copy:hover,
+.registration-payment-copy:focus-visible {
+  background: #edf4ed;
+}
+
+.registration-payment-copy:focus-visible {
+  outline: 2px solid rgba(15, 61, 46, 0.24);
+  outline-offset: 1px;
+}
+
+.registration-payment-copy-error {
+  margin: -8px 0 14px;
+  color: #a2342d;
+  font-size: 12px;
+}
+
 .custom-radio-field {
   display: grid;
   gap: 10px;
@@ -1097,6 +1188,20 @@
   .admin-event-form,
   .registration-success {
     padding: 18px;
+  }
+
+  .payment-accounts-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .payment-account-form-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .payment-account-remove {
+    min-height: 32px;
   }
 
   .event-info-list,
@@ -1923,6 +2028,10 @@
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.ticket-scanner-mode-tabs {
+  margin-bottom: 16px;
 }
 
 .ticket-scanner-layout {

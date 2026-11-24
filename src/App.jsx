@@ -32,6 +32,7 @@ const VolunteerReports = lazy(() => import('./pages/admin/Volunteers.jsx'))
 const VolunteerManagement = lazy(() => import('./pages/admin/VolunteerManagement.jsx'))
 const Organizations = lazy(() => import('./pages/admin/Organizations.jsx'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings.jsx'))
+const AdminAccess = lazy(() => import('./pages/admin/AdminAccess.jsx'))
 const UserDashboard = lazy(() => import('./pages/user/Dashboard.jsx'))
 const MyEvents = lazy(() => import('./pages/user/MyEvents.jsx'))
 const VolunteerDashboard = lazy(() => import('./pages/volunteer/Dashboard.jsx'))
@@ -143,6 +144,8 @@ function App() {
     page = <AdminRoute><Organizations /></AdminRoute>
   } else if (path === '/admin/settings') {
     page = <AdminRoute><AdminSettings /></AdminRoute>
+  } else if (path === '/admin/access') {
+    page = <AdminRoute><AdminAccess /></AdminRoute>
   } else if (paymentReceiptMatch) {
     page = <ProtectedRoute roles={['participant']}><PaymentReceipt registrationId={paymentReceiptMatch[1]} paymentId={paymentReceiptMatch[2]} /></ProtectedRoute>
   } else if (paymentMatch) {

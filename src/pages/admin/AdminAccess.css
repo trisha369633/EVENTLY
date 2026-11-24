@@ -1,0 +1,65 @@
+.admin-access-search {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  max-width: 720px;
+  margin-bottom: 20px;
+}
+
+.admin-access-search .form-field {
+  flex: 1;
+  margin: 0;
+}
+
+.admin-access-table td:first-child strong,
+.admin-access-table td:first-child small,
+.admin-access-action small {
+  display: block;
+}
+
+.admin-access-table td:first-child small,
+.admin-access-action small {
+  margin-top: 4px;
+  color: #647269;
+}
+
+.admin-access-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-access-role {
+  padding: 4px 9px;
+  border: 1px solid #e1e8e2;
+  border-radius: 999px;
+  color: #54645a;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.admin-access-role.is-super-admin {
+  border-color: #b7d0bf;
+  background: #edf5ef;
+  color: #174e34;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.admin-access-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+@media (max-width: 640px) {
+  .admin-access-search {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-access-search .button {
+    align-self: flex-start;
+  }
+}

@@ -11,7 +11,7 @@ import {
 import { listDepartments, listInstitutions } from '../../services/profileService.js'
 
 const modes = ['offline', 'online', 'hybrid']
-const fieldTypes = ['text', 'number', 'email', 'phone', 'dropdown', 'radio', 'textarea', 'checkbox']
+const fieldTypes = ['text', 'textarea', 'number', 'select', 'checkbox']
 const createEventDraftStorageKey = 'evently:/admin/events/create:draft'
 
 function readCreateEventDraft() {
@@ -50,6 +50,19 @@ function toLocalDateTime(value) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
+function normalizePaymentAccounts(accounts) {
+  if (!Array.isArray(accounts)) return []
+  return accounts.map((account) => ({
+    number: String(account?.number || ''),
+    note: String(account?.note || ''),
+  }))
+}
+
+function isValidPaymentNumber(value) {
+  const compact = value.trim().replace(/[\s().-]/g, '')
+  return /^\+?\d{8,15}$/.test(compact)
+}
+
 function errorMessage(error) {
   if (error?.code === '23505' || String(error?.message).includes('events_slug_key')) {
     return 'That URL slug is already in use. Choose a different one.'
@@ -86,16 +99,58 @@ function initialValues(event) {
 
 function initialCustomFields(event) {
   if (!Array.isArray(event?.custom_form_fields)) return []
-  return event.custom_form_fields.map((field, index) => ({
-    id: String(field.id || `field-${index + 1}`),
-    name: String(field.name || field.key || field.id || ''),
-    label: String(field.label || field.title || ''),
-    type: String(field.type || 'text').toLowerCase(),
-    required: Boolean(field.required),
-    options: Array.isArray(field.options)
-      ? field.options.map((option) => typeof option === 'string' ? option : option?.label || '').join(', ')
-      : '',
-  }))
+  const usedIds = new Set()
+  return event.custom_form_fields.map((field, index) => {
+    const label = String(field.label || field.title || '')
+    const baseId = String(field.id || slugify(label) || `field-${index + 1}`)
+    let id = baseId
+    let suffix = 2
+    while (usedIds.has(id)) {
+      id = `${baseId}-${suffix}`
+      suffix += 1
+    }
+    usedIds.add(id)
+    const storedType = String(field.type || 'text').toLowerCase()
+    const type = ({ dropdown: 'select', radio: 'select', email: 'text', phone: 'text' })[storedType] || storedType
+    const options = Array.isArray(field.options)
+      ? field.options.map((option) => typeof option === 'string' ? option : option?.label || option?.value || '').join(', ')
+      : ''
+    const preserveId = field.preserveId ?? !field.localId
+    return {
+      id,
+      localId: field.localId || id,
+      preserveId,
+      label,
+      type: fieldTypes.includes(type) ? type : 'text',
+      required: Boolean(field.required),
+      options,
+    }
+  })
+}
+
+function getUniqueCustomFieldId(label, fields, localId) {
+  const baseId = slugify(label)
+  if (!baseId) return ''
+  const usedIds = new Set(fields.filter((field) => field.localId !== localId && field.id).map((field) => field.id))
+  let id = baseId
+  let suffix = 2
+  while (usedIds.has(id)) {
+    id = `${baseId}-${suffix}`
+    suffix += 1
+  }
+  return id
+}
+
+function getCustomFieldPayload(fields) {
+  return normalizeCustomFields(fields.map((field) => ({
+    id: field.id || getUniqueCustomFieldId(field.label, fields, field.localId),
+    label: field.label,
+    type: field.type,
+    required: field.required,
+    options: field.type === 'select'
+      ? field.options.split(',').map((option) => option.trim()).filter(Boolean)
+      : [],
+  })))
 }
 
 function EventForm({ event = null, onSaved }) {
@@ -103,9 +158,12 @@ function EventForm({ event = null, onSaved }) {
   const statuses = event ? ['draft', 'published', 'cancelled', 'completed'] : ['draft', 'published']
   const [savedDraft] = useState(() => event ? null : readCreateEventDraft())
   const [values, setValues] = useState(() => ({ ...initialValues(event), ...savedDraft?.values }))
-  const [customFields, setCustomFields] = useState(() => (
-    Array.isArray(savedDraft?.customFields) ? savedDraft.customFields : initialCustomFields(event)
+  const [paymentAccounts, setPaymentAccounts] = useState(() => (
+    normalizePaymentAccounts(savedDraft?.paymentAccounts ?? event?.payment_accounts)
   ))
+  const [customFields, setCustomFields] = useState(() => initialCustomFields({
+    custom_form_fields: savedDraft?.customFields ?? event?.custom_form_fields,
+  }))
   const [institutions, setInstitutions] = useState([])
   const [departments, setDepartments] = useState([])
   const [errors, setErrors] = useState({})
@@ -126,6 +184,7 @@ function EventForm({ event = null, onSaved }) {
     if (event) return
     saveCreateEventDraft({
       values,
+      paymentAccounts,
       customFields,
       slugTouched,
       guestEnabled,
@@ -139,6 +198,7 @@ function EventForm({ event = null, onSaved }) {
   }, [
     event,
     values,
+    paymentAccounts,
     customFields,
     slugTouched,
     guestEnabled,
@@ -200,6 +260,23 @@ function EventForm({ event = null, onSaved }) {
     setErrors((current) => ({ ...current, [key]: '' }))
   }
 
+  const updatePaymentAccount = (index, key, value) => {
+    setPaymentAccounts((current) => current.map((account, accountIndex) => (
+      accountIndex === index ? { ...account, [key]: value } : account
+    )))
+    setErrors((current) => ({ ...current, paymentAccounts: undefined }))
+  }
+
+  const addPaymentAccount = () => {
+    setPaymentAccounts((current) => [...current, { number: '', note: '' }])
+    setErrors((current) => ({ ...current, paymentAccounts: undefined }))
+  }
+
+  const removePaymentAccount = (index) => {
+    setPaymentAccounts((current) => current.filter((_, accountIndex) => accountIndex !== index))
+    setErrors((current) => ({ ...current, paymentAccounts: undefined }))
+  }
+
   const handleInstitutionChange = async (institutionId) => {
     updateValue('institution_id', institutionId)
     updateValue('department_id', '')
@@ -216,20 +293,35 @@ function EventForm({ event = null, onSaved }) {
     }
   }
 
-  const updateCustomField = (id, patch) => {
-    setCustomFields((current) => current.map((field) => field.id === id ? { ...field, ...patch } : field))
+  const updateCustomField = (localId, patch) => {
+    setCustomFields((current) => current.map((field) => field.localId === localId ? { ...field, ...patch } : field))
+    setErrors((current) => ({ ...current, customFields: '' }))
+  }
+
+  const updateCustomFieldLabel = (localId, label) => {
+    setCustomFields((current) => current.map((field) => {
+      if (field.localId !== localId) return field
+      return {
+        ...field,
+        label,
+        id: field.preserveId ? field.id : getUniqueCustomFieldId(label, current, localId),
+      }
+    }))
+    setErrors((current) => ({ ...current, customFields: '' }))
   }
 
   const addCustomField = () => {
-    const id = `field-${Date.now()}`
+    const localId = `new-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${customFields.length + 1}`}`
     setCustomFields((current) => [...current, {
-      id,
-      name: '',
+      id: '',
+      localId,
+      preserveId: false,
       label: '',
       type: 'text',
       required: false,
       options: '',
     }])
+    setErrors((current) => ({ ...current, customFields: '' }))
   }
 
   const validate = async () => {
@@ -270,17 +362,15 @@ function EventForm({ event = null, onSaved }) {
     if (values.seat_limit !== '' && (!Number.isInteger(Number(values.seat_limit)) || Number(values.seat_limit) <= 0)) {
       nextErrors.seat_limit = 'Enter a positive whole number.'
     }
+    const paymentAccountErrors = paymentAccounts.map(({ number, note }) => (
+      number.trim() || note.trim()
+        ? isValidPaymentNumber(number) ? '' : 'Enter a valid number with 8–15 digits.'
+        : ''
+    ))
+    if (paymentAccountErrors.some(Boolean)) nextErrors.paymentAccounts = paymentAccountErrors
     if (customFields.some((field) => !field.label.trim())) nextErrors.customFields = 'Every additional field needs a label.'
-    const fieldNames = customFields.map((field) => field.name || slugify(field.label))
-    if (new Set(fieldNames).size !== fieldNames.length) nextErrors.customFields = 'Additional field labels must produce unique field names.'
     try {
-      normalizeCustomFields(customFields.map((field) => ({
-        ...field,
-        name: field.name || slugify(field.label),
-        options: ['dropdown', 'radio'].includes(field.type)
-          ? field.options.split(',').map((option) => option.trim()).filter(Boolean)
-          : [],
-      })))
+      getCustomFieldPayload(customFields)
     } catch (error) {
       nextErrors.customFields = error.message
     }
@@ -325,13 +415,10 @@ function EventForm({ event = null, onSaved }) {
         alumni_fee: Number(values.alumni_fee),
         seat_limit: values.seat_limit === '' ? null : Number(values.seat_limit),
         status: requestedStatus,
-        custom_form_fields: normalizeCustomFields(customFields.map((field) => ({
-          ...field,
-          name: field.name || slugify(field.label),
-          options: ['dropdown', 'radio'].includes(field.type)
-            ? field.options.split(',').map((option) => option.trim()).filter(Boolean)
-            : [],
-        }))),
+        payment_accounts: paymentAccounts
+          .filter((account) => account.number.trim() || account.note.trim())
+          .map((account) => ({ number: account.number.trim(), note: account.note.trim() })),
+        custom_form_fields: getCustomFieldPayload(customFields),
       }
       const saved = event
         ? await updateEvent(event.id, payload)
@@ -398,6 +485,42 @@ function EventForm({ event = null, onSaved }) {
       </div>
 
       <div className="admin-form-section">
+        <div className="admin-section-heading payment-accounts-heading">
+          <div><h2>Payment Receiving Numbers</h2><p>These numbers are shown to participants when they register for this event.</p></div>
+          <button className="button button-outline button-small" type="button" onClick={addPaymentAccount}>+ Add Payment Number</button>
+        </div>
+        {!paymentAccounts.length && <p className="admin-muted">No receiving numbers configured.</p>}
+        {paymentAccounts.map((account, index) => {
+          const rowError = errors.paymentAccounts?.[index]
+          return (
+            <div className="payment-account-form-row" key={index} role="group" aria-label={`Payment number ${index + 1}`}>
+              <label className="form-field">
+                <span>Number</span>
+                <input
+                  type="tel"
+                  value={account.number}
+                  onChange={(changeEvent) => updatePaymentAccount(index, 'number', changeEvent.target.value)}
+                  placeholder="017XXXXXXXX"
+                  required={Boolean(account.number.trim() || account.note.trim())}
+                  aria-invalid={Boolean(rowError)}
+                />
+                {rowError && <small className="field-error">{rowError}</small>}
+              </label>
+              <label className="form-field">
+                <span>Note <small className="optional-hint">(optional)</small></span>
+                <input
+                  value={account.note}
+                  onChange={(changeEvent) => updatePaymentAccount(index, 'note', changeEvent.target.value)}
+                  placeholder="bKash + Nagad"
+                />
+              </label>
+              <button className="inline-button payment-account-remove" type="button" onClick={() => removePaymentAccount(index)}>Remove</button>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="admin-form-section">
         <div className="admin-section-heading">
           <div><h2>Guest &amp; Family Registration</h2><p>Configure family and guest admission for this event.</p></div>
           <label className="check-option"><input type="checkbox" checked={guestEnabled} onChange={(changeEvent) => setGuestEnabled(changeEvent.target.checked)} /><span>Enable guest registration</span></label>
@@ -435,12 +558,15 @@ function EventForm({ event = null, onSaved }) {
         {errors.customFields && <p className="field-error" role="alert">{errors.customFields}</p>}
         {!customFields.length && <p className="admin-muted">No additional fields. Standard participant details are collected automatically.</p>}
         {customFields.map((field) => (
-          <div className="custom-field-editor" key={field.id}>
-            <label className="form-field"><span>Field label</span><input value={field.label} onChange={(event) => updateCustomField(field.id, { label: event.target.value, name: slugify(event.target.value) })} /></label>
-            <label className="form-field"><span>Field type</span><select value={field.type} onChange={(event) => updateCustomField(field.id, { type: event.target.value })}>{fieldTypes.map((type) => <option key={type} value={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}</select></label>
-            {['dropdown', 'radio'].includes(field.type) && <label className="form-field form-field-full"><span>Options (comma separated)</span><input value={field.options} onChange={(event) => updateCustomField(field.id, { options: event.target.value })} placeholder="Option one, Option two" /></label>}
-            <label className="check-option"><input type="checkbox" checked={field.required} onChange={(event) => updateCustomField(field.id, { required: event.target.checked })} /><span>Required</span></label>
-            <button type="button" className="inline-button custom-field-remove" onClick={() => setCustomFields((current) => current.filter((item) => item.id !== field.id))}>Remove field</button>
+          <div className="custom-field-editor" key={field.localId}>
+            <label className="form-field"><span>Field label</span><input required value={field.label} onChange={(event) => updateCustomFieldLabel(field.localId, event.target.value)} /></label>
+            <label className="form-field"><span>Field type</span><select value={field.type} onChange={(event) => updateCustomField(field.localId, { type: event.target.value })}>{fieldTypes.map((type) => <option key={type} value={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}</select></label>
+            {field.type === 'select' && <label className="form-field form-field-full"><span>Options (comma separated)</span><input value={field.options} onChange={(event) => updateCustomField(field.localId, { options: event.target.value })} placeholder="S, M, L, XL" /></label>}
+            <label className="check-option"><input type="checkbox" checked={field.required} onChange={(event) => updateCustomField(field.localId, { required: event.target.checked })} /><span>Required</span></label>
+            <button type="button" className="inline-button custom-field-remove" onClick={() => {
+              setCustomFields((current) => current.filter((item) => item.localId !== field.localId))
+              setErrors((current) => ({ ...current, customFields: '' }))
+            }}>Remove</button>
           </div>
         ))}
       </div>

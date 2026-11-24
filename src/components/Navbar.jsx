@@ -25,6 +25,8 @@ function Navbar() {
   const { user, roles, signOut } = useAuth()
   const canAccessParticipantWorkspace = roles.includes('participant')
   const canAccessVolunteerWorkspace = roles.includes('volunteer')
+  const isSuperAdmin = roles.includes('super_admin')
+  const showVolunteerWorkspace = canAccessVolunteerWorkspace && !isSuperAdmin
   const path = window.location.pathname
   const onHome = path === '/'
   const onEvents = path === '/events' || path.startsWith('/events/')
@@ -49,12 +51,12 @@ function Navbar() {
 
   const accountActions = user ? (
     <>
-      {canAccessParticipantWorkspace && canAccessVolunteerWorkspace
+      {canAccessParticipantWorkspace
         ? <>
-          <a className="nav-text-action" href="/volunteer" onClick={closeMenu}>Volunteer Workspace</a>
+          {showVolunteerWorkspace && <a className="nav-text-action" href="/volunteer" onClick={closeMenu}>Volunteer Workspace</a>}
           <a className="nav-text-action" href="/dashboard" onClick={closeMenu}>My Evently</a>
         </>
-        : <a className="nav-text-action" href={accountPath} onClick={closeMenu}>My Evently</a>}
+        : <a className="nav-text-action" href={showVolunteerWorkspace ? '/volunteer' : accountPath} onClick={closeMenu}>{showVolunteerWorkspace ? 'Volunteer Workspace' : 'My Evently'}</a>}
       {logoutConfirm ? (
         <>
           <button className="nav-text-action" type="button" onClick={() => setLogoutConfirm(false)}>Cancel</button>
