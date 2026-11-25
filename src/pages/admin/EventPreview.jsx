@@ -49,6 +49,7 @@ function EventPreview({ eventId }) {
             <div><dt>Ends</dt><dd>{formatEventDateTime(event.event_end)}</dd></div>
             <div><dt>Registration deadline</dt><dd>{formatEventDateTime(event.registration_deadline)}</dd></div>
             <div><dt>Starting fee</dt><dd>{formatFee(getStartingFee(event))}</dd></div>
+            <div><dt>Alumni registration</dt><dd>{event.alumni_allowed === false ? 'Not allowed' : 'Allowed'}</dd></div>
             <div><dt>Seat limit</dt><dd>{event.seat_limit === null ? 'Unlimited' : event.seat_limit}</dd></div>
           </dl>
           {Array.isArray(event.custom_form_fields) && event.custom_form_fields.length > 0 && <div><h3>Additional registration fields</h3><ul>{event.custom_form_fields.map((field, index) => <li key={field.id || field.name || index}>{field.label || field.title} · {field.type}{field.required ? ' · required' : ''}</li>)}</ul></div>}

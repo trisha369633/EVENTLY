@@ -92,6 +92,9 @@ function initialValues(event) {
     student_fee: event?.student_fee ?? 0,
     teacher_fee: event?.teacher_fee ?? 0,
     alumni_fee: event?.alumni_fee ?? 0,
+    alumni_allowed: event?.alumni_allowed ?? true,
+    child_under_6_fee: Number(event?.child_under_6_fee ?? 0),
+    child_above_6_fee: Number(event?.child_above_6_fee ?? 0),
     seat_limit: event?.seat_limit ?? '',
     status: event?.status || 'draft',
   }
@@ -176,8 +179,8 @@ function EventForm({ event = null, onSaved }) {
   const [totalGuestLimit, setTotalGuestLimit] = useState(savedDraft?.totalGuestLimit ?? '0')
   const [guestDistributionEnabled, setGuestDistributionEnabled] = useState(savedDraft?.guestDistributionEnabled ?? true)
   const [commonGuestFee, setCommonGuestFee] = useState(savedDraft?.commonGuestFee ?? '0')
-  const [childUnder6Fee, setChildUnder6Fee] = useState(savedDraft?.childUnder6Fee ?? '0')
-  const [childAbove6Fee, setChildAbove6Fee] = useState(savedDraft?.childAbove6Fee ?? '0')
+  const [childUnder6Fee, setChildUnder6Fee] = useState(String(savedDraft?.childUnder6Fee ?? values.child_under_6_fee ?? 0))
+  const [childAbove6Fee, setChildAbove6Fee] = useState(String(savedDraft?.childAbove6Fee ?? values.child_above_6_fee ?? 0))
   const initialInstitutionId = event?.institution_id || savedDraft?.values?.institution_id || ''
 
   useEffect(() => {
@@ -246,8 +249,6 @@ function EventForm({ event = null, onSaved }) {
         setTotalGuestLimit(String(first.total_guest_limit))
         setGuestDistributionEnabled(Boolean(first.guest_distribution_enabled))
         setCommonGuestFee(String(first?.common_guest_fee ?? rows.find((row) => row.relationship && row.relationship !== 'child')?.guest_fee ?? 0))
-        setChildUnder6Fee(String(first?.child_under_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0))
-        setChildAbove6Fee(String(first?.child_above_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0))
       })
       .catch((error) => setFormError(error.message || 'Guest settings could not be loaded.'))
     return () => {
@@ -258,6 +259,15 @@ function EventForm({ event = null, onSaved }) {
   const updateValue = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }))
     setErrors((current) => ({ ...current, [key]: '' }))
+  }
+
+  const updateAlumniAllowed = (allowed) => {
+    setValues((current) => ({
+      ...current,
+      alumni_allowed: allowed,
+      alumni_fee: allowed ? current.alumni_fee : '0',
+    }))
+    setErrors((current) => ({ ...current, alumni_fee: '' }))
   }
 
   const updatePaymentAccount = (index, key, value) => {
@@ -339,7 +349,9 @@ function EventForm({ event = null, onSaved }) {
     if (values.cover_image_url && !getSafeImageUrl(values.cover_image_url)) {
       nextErrors.cover_image_url = 'Enter an HTTP or HTTPS image URL.'
     }
-    for (const key of ['student_fee', 'teacher_fee', 'alumni_fee']) {
+    for (const key of values.alumni_allowed
+      ? ['student_fee', 'teacher_fee', 'alumni_fee']
+      : ['student_fee', 'teacher_fee']) {
       if (values[key] === '' || !Number.isFinite(Number(values[key])) || Number(values[key]) < 0) {
         nextErrors[key] = 'Enter a fee of zero or more.'
       }
@@ -412,7 +424,10 @@ function EventForm({ event = null, onSaved }) {
         registration_deadline: new Date(values.registration_deadline).toISOString(),
         student_fee: Number(values.student_fee),
         teacher_fee: Number(values.teacher_fee),
-        alumni_fee: Number(values.alumni_fee),
+        alumni_fee: values.alumni_allowed ? Number(values.alumni_fee) : 0,
+        alumni_allowed: values.alumni_allowed,
+        child_under_6_fee: Number(childUnder6Fee || 0),
+        child_above_6_fee: Number(childAbove6Fee || 0),
         seat_limit: values.seat_limit === '' ? null : Number(values.seat_limit),
         status: requestedStatus,
         payment_accounts: paymentAccounts
@@ -431,8 +446,8 @@ function EventForm({ event = null, onSaved }) {
         guestDistributionEnabled,
         relationshipFees: [
           { relationship: 'common', guest_fee: Number(commonGuestFee), is_active: guestEnabled },
-          { relationship: 'child_under_6', guest_fee: Number(childUnder6Fee), is_active: guestEnabled },
-          { relationship: 'child_above_6', guest_fee: Number(childAbove6Fee), is_active: guestEnabled },
+          { relationship: 'child_under_6', guest_fee: Number(childUnder6Fee || 0), is_active: guestEnabled },
+          { relationship: 'child_above_6', guest_fee: Number(childAbove6Fee || 0), is_active: guestEnabled },
         ],
       })
       if (!event) clearCreateEventDraft()
@@ -476,9 +491,10 @@ function EventForm({ event = null, onSaved }) {
       <div className="admin-form-section">
         <h2>Fees and capacity</h2>
         <div className="form-grid">
-          {['student_fee', 'teacher_fee', 'alumni_fee'].map((key) => (
-            <label className="form-field" key={key}><span>{key.split('_')[0][0].toUpperCase() + key.split('_')[0].slice(1)} registration fee</span><input type="number" min="0" step="0.01" value={values[key]} onChange={(event) => updateValue(key, event.target.value)} aria-invalid={Boolean(errors[key])} />{errors[key] && <small className="field-error">{errors[key]}</small>}</label>
-          ))}
+          <label className="form-field"><span>Student registration fee</span><input type="number" min="0" step="0.01" value={values.student_fee} onChange={(changeEvent) => updateValue('student_fee', changeEvent.target.value)} aria-invalid={Boolean(errors.student_fee)} />{errors.student_fee && <small className="field-error">{errors.student_fee}</small>}</label>
+          <label className="form-field"><span>Teacher registration fee</span><input type="number" min="0" step="0.01" value={values.teacher_fee} onChange={(changeEvent) => updateValue('teacher_fee', changeEvent.target.value)} aria-invalid={Boolean(errors.teacher_fee)} />{errors.teacher_fee && <small className="field-error">{errors.teacher_fee}</small>}</label>
+          <label className="form-field"><span>Alumni registration fee</span><input type="number" min="0" step="0.01" value={values.alumni_fee} onChange={(changeEvent) => updateValue('alumni_fee', changeEvent.target.value)} disabled={!values.alumni_allowed} aria-invalid={Boolean(errors.alumni_fee)} />{!values.alumni_allowed && <small className="optional-hint">Saved as 0 while alumni registration is not allowed.</small>}{errors.alumni_fee && <small className="field-error">{errors.alumni_fee}</small>}</label>
+          <label className="form-field"><span>Alumni registration</span><select value={values.alumni_allowed ? 'allowed' : 'not_allowed'} onChange={(changeEvent) => updateAlumniAllowed(changeEvent.target.value === 'allowed')}><option value="allowed">Allowed</option><option value="not_allowed">Not Allowed</option></select></label>
           <label className="form-field"><span>Maximum seat limit <small className="optional-hint">(optional)</small></span><input type="number" min="1" step="1" value={values.seat_limit} onChange={(event) => updateValue('seat_limit', event.target.value)} aria-invalid={Boolean(errors.seat_limit)} />{errors.seat_limit && <small className="field-error">{errors.seat_limit}</small>}</label>
           {event && <label className="form-field"><span>Event status</span><select value={values.status} onChange={(changeEvent) => updateValue('status', changeEvent.target.value)}>{statuses.map((status) => <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>)}</select></label>}
         </div>
@@ -554,7 +570,7 @@ function EventForm({ event = null, onSaved }) {
       </div>
 
       <div className="admin-form-section">
-        <div className="admin-section-heading"><div><h2>Additional registration fields</h2><p>These are stored in the event’s custom_form_fields JSON array.</p></div><button className="button button-outline button-small" type="button" onClick={addCustomField}>Add field</button></div>
+        <div className="admin-section-heading"><div><h2>Additional registration fields</h2></div><button className="button button-outline button-small" type="button" onClick={addCustomField}>Add field</button></div>
         {errors.customFields && <p className="field-error" role="alert">{errors.customFields}</p>}
         {!customFields.length && <p className="admin-muted">No additional fields. Standard participant details are collected automatically.</p>}
         {customFields.map((field) => (

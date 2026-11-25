@@ -4,13 +4,15 @@ import Icon from '../../components/Icon.jsx'
 import StatusBadge from '../../components/StatusBadge.jsx'
 import { useAuth } from '../../context/useAuth.js'
 import { formatEventDateTime, formatFee, getRegistrationAvailability, getStartingFee } from '../../lib/eventUtils.js'
-import { getOwnRegisteredEventBySlug, getPublishedEventBySlug, getPublicRegistrationCounts } from '../../services/eventService.js'
+import { getEventGuestSettings, getOwnRegisteredEventBySlug, getPublishedEventBySlug, getPublicRegistrationCounts } from '../../services/eventService.js'
 import { getRegistrationByEvent } from '../../services/registrationService.js'
 
 function EventDetails({ slug }) {
   const [event, setEvent] = useState(null)
   const [registrationCount, setRegistrationCount] = useState(null)
   const [registration, setRegistration] = useState(null)
+  const [guestRegistrationEnabled, setGuestRegistrationEnabled] = useState(false)
+  const [guestSettingsError, setGuestSettingsError] = useState('')
   const [registrationUserId, setRegistrationUserId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -57,6 +59,27 @@ function EventDetails({ slug }) {
       active = false
     }
   }, [slug, user, authLoading])
+
+  useEffect(() => {
+    if (!event?.id) return undefined
+    let active = true
+    getEventGuestSettings(event.id)
+      .then((rows) => {
+        if (active) {
+          setGuestRegistrationEnabled(Boolean(rows[0]?.is_enabled))
+          setGuestSettingsError('')
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          setGuestRegistrationEnabled(false)
+          setGuestSettingsError(loadError.message || 'Guest fee information could not be loaded.')
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [event?.id])
 
   useEffect(() => {
     if (authLoading || !user || !event) return undefined
@@ -142,8 +165,16 @@ function EventDetails({ slug }) {
             <dl className="event-info-list">
               <div><dt>Student</dt><dd>{formatFee(event.student_fee)}</dd></div>
               <div><dt>Teacher</dt><dd>{formatFee(event.teacher_fee)}</dd></div>
-              <div><dt>Alumni</dt><dd>{formatFee(event.alumni_fee)}</dd></div>
+              {event.alumni_allowed !== false && <div><dt>Alumni</dt><dd>{formatFee(event.alumni_fee)}</dd></div>}
+              {guestRegistrationEnabled && (
+                <>
+                  <div><dt>Child guest — under 6 years</dt><dd>{formatFee(Number(event.child_under_6_fee || 0))}</dd></div>
+                  <div><dt>Child guest — above 6 years</dt><dd>{formatFee(Number(event.child_above_6_fee || 0))}</dd></div>
+                </>
+              )}
             </dl>
+            {guestSettingsError && <p className="detail-muted" role="status">Guest fee information is temporarily unavailable.</p>}
+            {event.alumni_allowed === false && <p className="detail-muted">Registration is open to Students and Teachers only.</p>}
             <p className="detail-muted">The registration fee depends on participant type. If the selected fee is greater than zero, manual payment follows sign-up.</p>
           </section>
         </article>

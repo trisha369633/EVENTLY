@@ -81,19 +81,58 @@ function TicketScanner({
         return
       }
       const resolvedTicket = await validateAttendeeTicket({ eventId, token: privateToken })
-      const rows = await recordContinuousAttendeeDistribution({
-        eventId,
-        token: privateToken,
-        itemIds: selectedItemIds,
-      })
+      const selectedItems = assignedItems.filter((item) => (
+        selectedItemIds.some((itemId) => String(itemId) === String(item.item_id))
+      ))
+      const isGuest = String(resolvedTicket?.attendee_type || '').toLowerCase() === 'guest'
+      const notApplicableItems = isGuest
+        ? selectedItems.filter((item) => resolvedTicket?.guest_eligible === false || item.guest_eligible === false)
+        : []
+      const notApplicableItemIds = new Set(notApplicableItems.map((item) => String(item.item_id)))
+      const applicableItemIds = selectedItemIds.filter((itemId) => !notApplicableItemIds.has(String(itemId)))
+      const distributionRows = applicableItemIds.length
+        ? await recordContinuousAttendeeDistribution({
+            eventId,
+            token: privateToken,
+            itemIds: applicableItemIds,
+          })
+        : []
+      const notApplicableRows = notApplicableItems.map((item) => ({
+        item_id: item.item_id,
+        item_name: item.item_name,
+        item_status: 'not_applicable',
+        event_title: resolvedTicket?.event_title,
+        attendee_name: resolvedTicket?.attendee_name || resolvedTicket?.participant_name,
+        attendee_type: resolvedTicket?.attendee_type,
+        relationship: resolvedTicket?.relationship,
+        main_participant_name: resolvedTicket?.main_participant_name,
+      }))
+      const rowsByItemId = new Map(distributionRows.map((row) => [String(row.item_id), row]))
+      const notApplicableByItemId = new Map(notApplicableRows.map((row) => [String(row.item_id), row]))
+      const rows = selectedItemIds
+        .map((itemId) => notApplicableByItemId.get(String(itemId)) || rowsByItemId.get(String(itemId)))
+        .filter(Boolean)
+        .concat(distributionRows.filter((row) => !selectedItemIds.some((itemId) => String(itemId) === String(row.item_id))))
       setToken('')
       const firstItem = rows.find((row) => row.attendee_name)
-      const invalid = rows.every((row) => row.item_status === 'invalid_ticket')
+      const invalid = rows.some((row) => row.item_status === 'invalid_ticket')
+      const allNotApplicable = rows.length > 0 && rows.every((row) => row.item_status === 'not_applicable')
+      const resultCode = invalid
+        ? 'INVALID_TICKET'
+        : rows.some((row) => row.item_status === 'distributed')
+          ? 'DISTRIBUTION_COMPLETE'
+          : rows.some((row) => row.item_status === 'already_received')
+            ? 'ALREADY_RECEIVED'
+            : allNotApplicable
+              ? 'NOT_APPLICABLE'
+              : 'NOT_ELIGIBLE'
       setResult({
-        result_code: invalid ? 'INVALID_TICKET' : rows.some((row) => row.item_status === 'distributed') ? 'DISTRIBUTION_COMPLETE' : 'ALREADY_RECEIVED',
+        result_code: resultCode,
         result_message: invalid
           ? 'This ticket is invalid, revoked, cancelled, or not eligible.'
-          : 'Selected item statuses were confirmed by the database.',
+          : allNotApplicable
+            ? 'Selected items are not applicable for this guest.'
+            : 'Selected item statuses were confirmed by the database.',
         event_title: firstItem?.event_title || events.find((event) => String(event.event_id) === eventId)?.event_title,
         participant_name: firstItem?.attendee_name || 'Unknown attendee',
         participant_type: firstItem?.attendee_type,
@@ -108,7 +147,7 @@ function TicketScanner({
     } finally {
       setChecking(false)
     }
-  }, [eventId, events, continuousSessionActive, selectedItemIds, isDistributionMode, isSuperAdmin])
+  }, [eventId, events, assignedItems, continuousSessionActive, selectedItemIds, isDistributionMode, isSuperAdmin])
 
   useEffect(() => {
     let active = true
@@ -286,6 +325,8 @@ function TicketScanner({
           ? 'Successfully Distributed'
           : row.item_status === 'already_received'
             ? 'Already Received'
+            : row.item_status === 'not_applicable'
+              ? 'Not applicable for this guest'
             : row.item_status === 'invalid_ticket'
               ? 'Invalid or ineligible ticket'
               : row.item_status === 'unauthorized'
@@ -359,7 +400,11 @@ function TicketScanner({
                 ? 'Distribution complete'
                 : result.result_code === 'ALREADY_RECEIVED'
                   ? 'Already received'
-                  : 'Invalid ticket'
+                  : result.result_code === 'NOT_APPLICABLE'
+                    ? 'Not applicable'
+                    : result.result_code === 'NOT_ELIGIBLE'
+                      ? 'Not eligible'
+                      : 'Invalid ticket'
               : String(result.result_code || '').toLowerCase().includes('already')
                 ? 'Already checked in'
                   : ['valid', 'checked_in', 'check_in_success'].some((code) => String(result.result_code || '').toLowerCase().includes(code))

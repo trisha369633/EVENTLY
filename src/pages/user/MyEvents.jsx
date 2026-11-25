@@ -5,20 +5,99 @@ import { formatEventDate, formatEventDateTime, formatFee } from '../../lib/event
 import { getPublishedEvents } from '../../services/eventService.js'
 import { getMyRegisteredEventDetails, getMyRegistrations } from '../../services/registrationService.js'
 import { getMyPaymentSubmissions } from '../../services/paymentService.js'
-import { getMyAttendeeTickets, getMyEventTickets } from '../../services/ticketService.js'
+import { getEventTicketPassMeta, getMyAttendeeTickets, getMyEventTickets } from '../../services/ticketService.js'
 import { createTicketQrDataUrl, downloadTicketPdf } from '../../services/ticketPdfService.js'
 import { getMyEventDistributionBenefits } from '../../services/distributionService.js'
 
-function TicketQrDisplay({ ticket, eventTitle }) {
+function ticketIssuer(ticket, passMeta, metadataLoaded) {
+  const joinedIssuer = ticket.issuer
+    || ticket.issuer_profile
+    || ticket.issued_by_profile
+    || ticket.profiles
+    || ticket.profile
+    || (typeof ticket.issued_by === 'object' ? ticket.issued_by : null)
+  const issuer = Array.isArray(joinedIssuer) ? joinedIssuer[0] : joinedIssuer
+  const metadataIssuer = passMeta?.issuer
+    || passMeta?.issuer_profile
+    || passMeta?.profile
+    || (typeof passMeta?.issued_by === 'object' ? passMeta.issued_by : null)
+  const metaIssuer = Array.isArray(metadataIssuer) ? metadataIssuer[0] : metadataIssuer
+  const metadataHasIssuer = Boolean(passMeta) && [
+    'issuer_name',
+    'issuer_full_name',
+    'issuer_email',
+    'issued_by_email',
+    'issued_by',
+    'issuer_id',
+  ].some((key) => Object.hasOwn(passMeta, key))
+  const metadataName = [
+    passMeta?.issuer_name,
+    passMeta?.issuer_full_name,
+    metaIssuer?.full_name,
+    metaIssuer?.name,
+  ].map((value) => String(value || '').trim()).find(Boolean)
+  const ticketName = [
+    ticket.issuer_name,
+    ticket.issuer_full_name,
+    ticket.issued_by_name,
+    issuer?.full_name,
+    issuer?.name,
+  ].map((value) => String(value || '').trim()).find(Boolean)
+  const name = (metadataLoaded && metadataHasIssuer ? metadataName : metadataName || ticketName)
+  const metadataEmail = [
+    passMeta?.issuer_email,
+    passMeta?.issued_by_email,
+    metaIssuer?.email,
+  ].map((value) => String(value || '').trim()).find(Boolean)
+  const ticketEmail = [
+    ticket.issuer_email,
+    ticket.issued_by_email,
+    issuer?.email,
+  ].map((value) => String(value || '').trim()).find(Boolean)
+  const email = metadataLoaded && metadataHasIssuer ? metadataEmail : metadataEmail || ticketEmail
+  if (name && name !== 'System / Auto-issued') {
+    return { name, email }
+  }
+  if (email) return { name: email, email: '' }
+  if (metadataLoaded) {
+    if (!passMeta) return { name: 'Issuer unavailable', email: '' }
+    const metaIssuedBy = passMeta.issued_by ?? passMeta.issuer_id
+    if (metadataHasIssuer && metaIssuedBy == null) return { name: 'System / Auto-issued', email: '' }
+    return { name: 'Issuer unavailable', email: '' }
+  }
+  return { name: 'Issuer unavailable', email: '' }
+}
+
+function TicketQrDisplay({ ticket, eventTitle, attendeeType, eventDetails, participantName, guestOf }) {
   const [visible, setVisible] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [passMeta, setPassMeta] = useState(null)
+  const [metadataLoaded, setMetadataLoaded] = useState(false)
+  const [metadataLoading, setMetadataLoading] = useState(false)
+  const [metadataError, setMetadataError] = useState('')
+  const isGuest = attendeeType === 'guest'
+  const qrColor = isGuest ? '#162e52' : '#133a27'
+  const issuer = ticketIssuer(ticket, passMeta, metadataLoaded)
+  const issuedAt = passMeta?.issued_at || ticket.issued_at
+  const ticketId = ticket.id ?? ticket.ticket_id
+  const eventMode = String(ticket.event_mode || eventDetails?.event_mode || '').toLowerCase()
+  const venue = ticket.venue || eventDetails?.venue
+  const venueMode = eventMode === 'online'
+    ? venue || 'Online event'
+    : [venue, eventMode && eventMode !== 'offline' ? eventMode : ''].filter(Boolean).join(' · ') || 'Venue to be announced'
+  const attendeeName = ticket.attendee_name || ticket.participant_name || participantName || 'Attendee'
+  const attendeeTypeLabel = isGuest
+    ? `GUEST • ${ticket.relationship || 'GUEST'}`
+    : ticket.participant_type || 'PARTICIPANT'
+  const ticketStatus = ticket.ticket_status === 'revoked' ? 'REVOKED' : 'ACTIVE'
+  const title = ticket.event_title || eventTitle || 'Event'
 
   useEffect(() => {
     if (!visible) return undefined
     let active = true
-    createTicketQrDataUrl(ticket.ticket_token)
+    createTicketQrDataUrl(ticket.ticket_token, qrColor)
       .then((dataUrl) => {
         if (active) setQrDataUrl(dataUrl)
       })
@@ -31,7 +110,30 @@ function TicketQrDisplay({ ticket, eventTitle }) {
     return () => {
       active = false
     }
-  }, [ticket.ticket_token, visible])
+  }, [ticket.ticket_token, visible, qrColor])
+
+  useEffect(() => {
+    if (!visible) return undefined
+    if (!ticketId) return undefined
+    let active = true
+    getEventTicketPassMeta(ticketId)
+      .then((meta) => {
+        if (!active) return
+        setPassMeta(meta)
+        setMetadataLoaded(true)
+      })
+      .catch((metaError) => {
+        if (!active) return
+        setPassMeta(null)
+        setMetadataError(metaError.message || 'Ticket issue details could not be loaded.')
+      })
+      .finally(() => {
+        if (active) setMetadataLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [ticketId, visible])
 
   const toggleVisible = () => {
     if (visible) {
@@ -40,6 +142,10 @@ function TicketQrDisplay({ ticket, eventTitle }) {
     }
     setQrDataUrl('')
     setError('')
+    setPassMeta(null)
+    setMetadataLoaded(false)
+    setMetadataLoading(Boolean(ticketId))
+    setMetadataError(ticketId ? '' : 'Ticket issue details are unavailable.')
     setLoading(true)
     setVisible(true)
   }
@@ -47,15 +153,44 @@ function TicketQrDisplay({ ticket, eventTitle }) {
   return (
     <div className="ticket-qr-display">
       <button className="button button-outline button-small" type="button" aria-expanded={visible} onClick={toggleVisible}>
-        {visible ? 'Hide ticket QR' : 'Display ticket QR'}
+        {visible ? 'Hide ticket' : 'View ticket'}
       </button>
       {visible && (
-        <div className="ticket-qr-card" aria-live="polite">
-          {loading && <span role="status">Preparing ticket QR…</span>}
-          {error && <span className="field-error" role="alert">{error}</span>}
-          {qrDataUrl && <img src={qrDataUrl} alt={`QR ticket for ${eventTitle}`} />}
-          <small>Keep this private ticket credential to yourself.</small>
-        </div>
+        <article className={`boarding-pass ${isGuest ? 'boarding-pass--guest' : 'boarding-pass--participant'}`} aria-live="polite">
+          <header className="boarding-pass-header">
+            <div className="boarding-pass-brand"><span className="boarding-pass-mark">E</span><strong>EVENTLY</strong></div>
+            <span className="boarding-pass-badge">{isGuest ? 'GUEST PASS' : 'PARTICIPANT PASS'}</span>
+          </header>
+          <div className="boarding-pass-layout">
+            <section className="boarding-pass-info">
+              <span className="boarding-pass-field-label">EVENT</span>
+              <h2>{title}</h2>
+              <dl className="boarding-pass-details">
+                <div><dt>DATE &amp; TIME</dt><dd>{formatEventDateTime(ticket.event_start || eventDetails?.event_start)}</dd></div>
+                <div><dt>VENUE / MODE</dt><dd>{venueMode}</dd></div>
+                <div><dt>PARTICIPANT</dt><dd>{attendeeName}</dd></div>
+                <div><dt>TYPE</dt><dd className="boarding-pass-type">{attendeeTypeLabel}</dd></div>
+                {isGuest && <div className="boarding-pass-guest-of"><dt>GUEST OF</dt><dd>{guestOf || passMeta?.main_participant_name || ticket.guest_of || '—'}</dd></div>}
+                <div><dt>TICKET REFERENCE</dt><dd>{ticket.ticket_reference || '—'}</dd></div>
+                <div><dt>ISSUED</dt><dd>{issuedAt ? formatEventDateTime(issuedAt) : 'Issue time unavailable'}</dd></div>
+                <div><dt>ISSUED BY</dt><dd>{issuer.name}{issuer.email && <small>{issuer.email}</small>}</dd></div>
+                <div><dt>STATUS</dt><dd><span className={`boarding-pass-status ${ticketStatus === 'REVOKED' ? 'is-revoked' : ''}`}>{ticketStatus}</span></dd></div>
+              </dl>
+              {metadataLoading && <small role="status">Loading ticket issue details…</small>}
+              {metadataError && <small className="field-error" role="status">{metadataError}</small>}
+            </section>
+            <aside className="boarding-pass-qr-panel">
+              <div className="boarding-pass-qr">
+                {loading && <span role="status">Preparing ticket QR…</span>}
+                {error && <span className="field-error" role="alert">{error}</span>}
+                {qrDataUrl && <img src={qrDataUrl} alt={`QR ticket for ${title}`} />}
+              </div>
+              <strong className="boarding-pass-valid">VALID</strong>
+              <p>Present this QR code at event day.</p>
+              <small>The QR contains a private ticket credential. Do not share it.</small>
+            </aside>
+          </div>
+        </article>
       )}
     </div>
   )
@@ -363,7 +498,7 @@ function MyEvents({ compact = false }) {
                         </div>
                         {(ticket?.ticket_status === 'active' || ticket?.ticket_status === 'checked_in') && ticket.ticket_token && (
                           <div className="my-ticket-actions">
-                            <TicketQrDisplay ticket={ticket} eventTitle={title} />
+                            <TicketQrDisplay ticket={ticket} eventTitle={title} attendeeType="participant" eventDetails={event} participantName={registration.full_name} />
                             <button
                               className="button button-outline button-small"
                               type="button"
@@ -395,7 +530,14 @@ function MyEvents({ compact = false }) {
                                 </div>
                                 {attendeeTicket.ticket_status === 'active' && attendeeTicket.ticket_token && (
                                   <div className="attendee-ticket-actions">
-                                    <TicketQrDisplay ticket={attendeeTicket} eventTitle={attendeeTicket.event_title} />
+                                    <TicketQrDisplay
+                                      ticket={attendeeTicket}
+                                      eventTitle={attendeeTicket.event_title}
+                                      attendeeType={attendeeTicket.attendee_type}
+                                      eventDetails={event}
+                                      participantName={attendeeTicket.attendee_name}
+                                      guestOf={registration.full_name || attendeeTicket.guest_of}
+                                    />
                                     <button
                                       className="button button-outline button-small"
                                       type="button"
@@ -407,6 +549,9 @@ function MyEvents({ compact = false }) {
                                         attendee_type: attendeeTicket.attendee_type,
                                         relationship: attendeeTicket.relationship,
                                         participant_type: attendeeTicket.attendee_type,
+                                        issued_by: attendeeTicket.issued_by,
+                                        issuer_name: attendeeTicket.issuer_name,
+                                        issuer_email: attendeeTicket.issuer_email,
                                         event_title: attendeeTicket.event_title,
                                         event_start: event?.event_start,
                                         venue: event?.venue,

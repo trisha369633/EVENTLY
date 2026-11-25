@@ -87,6 +87,15 @@ function VolunteerManagement() {
     }))
 
   useEffect(() => {
+    if (!selectedUserId) return undefined
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setSelectedUserId('')
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedUserId])
+
+  useEffect(() => {
     let active = true
     searchAdminUsers({
       search,
@@ -272,53 +281,62 @@ function VolunteerManagement() {
       </section>
 
       {selectedUser && (
-        <section className="admin-section-panel volunteer-profile-panel">
-          <div className="admin-section-heading"><div><span className="eyebrow">VOLUNTEER PROFILE</span><h2>{selectedUser.full_name || selectedUser.email}</h2><p>{selectedUser.email || 'Email unavailable'} · {selectedUser.institution_name || 'Institution unavailable'} · {selectedUser.department_name || 'Department unavailable'}</p></div><span className={`ticket-status-badge ${isVolunteer ? 'is-active' : 'is-revoked'}`}>{isVolunteer ? 'Volunteer role active' : 'Volunteer role inactive'}</span></div>
-          {!isVolunteer
-            ? <p className="admin-muted">Assign the volunteer role before managing event assignments or item permissions.</p>
-            : <>
-              <div className="volunteer-management-subsection">
-                <div className="admin-section-heading"><div><h3>Assigned Events</h3><p>Event-scoped ticket access uses the existing Phase 5 assignment RPCs.</p></div></div>
-                <form className="volunteer-search-form" onSubmit={(event) => void handleAssignEvent(event)}>
-                  <label className="form-field"><span>Event</span><select value={eventId} onChange={(event) => setEventId(event.target.value)} required disabled={managementLoading || !managementData?.events?.length}><option value="">Select an event</option>{(managementData?.events || []).map((event) => <option value={event.id} key={event.id}>{event.title}</option>)}</select></label>
-                  <button className="button button-primary button-small" type="submit" disabled={!eventId || Boolean(busyAction)}>Assign event</button>
-                </form>
-                {selectedEventAssignments.length === 0
-                  ? <p className="admin-muted">No event assignments are recorded for this volunteer.</p>
-                  : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Event</th><th>Assignment</th><th>Action</th></tr></thead><tbody>
-                    {selectedEventAssignments.map((event) => <tr key={event.eventId}><td>{event.eventTitle}</td><td>{event.assignment.is_active ? 'Active' : 'Removed'}</td><td>{event.assignment.is_active && <button className="inline-button danger-link" type="button" disabled={Boolean(busyAction)} onClick={() => void handleRevokeEvent(event)}>Remove assignment</button>}</td></tr>)}
-                  </tbody></table></div>}
-              </div>
-
-              <div className="volunteer-management-subsection">
-                <div className="admin-section-heading"><div><h3>Distribution Item Permissions</h3><p>Only items within active event assignments are listed. No item access is granted by default.</p></div></div>
-                {managementData?.distributionError
-                  ? <p className="admin-muted">Phase 6 item permission data is unavailable.</p>
-                  : !activeEventIds.size
-                    ? <p className="admin-muted">Assign this volunteer to an event before granting item access.</p>
-                    : permittedItems.length === 0
-                      ? <p className="admin-muted">No distribution items are configured for the volunteer’s assigned events.</p>
-                      : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Item / event</th><th>Permission</th><th>Action</th></tr></thead><tbody>
-                        {permittedItems.map((item) => {
-                          const active = Boolean(item.assignment?.is_active)
-                          return <tr key={item.item_id}><td><strong>{item.item_name}</strong><small>{item.event_title}</small></td><td>{active ? 'Active' : 'Not granted'}</td><td><button className={`inline-button${active ? ' danger-link' : ''}`} type="button" disabled={Boolean(busyAction)} onClick={() => void handleItemPermission(item, !active)}>{active ? 'Remove item access' : 'Grant item access'}</button></td></tr>
-                        })}
+        <div className="volunteer-profile-backdrop" onClick={(event) => {
+          if (event.target === event.currentTarget) setSelectedUserId('')
+        }}>
+          <section className="admin-section-panel volunteer-profile-panel volunteer-profile-modal" role="dialog" aria-modal="true" aria-labelledby="volunteer-profile-title">
+            <header className="volunteer-profile-modal-header">
+              <div className="admin-section-heading"><div><span className="eyebrow">VOLUNTEER PROFILE</span><h2 id="volunteer-profile-title">{selectedUser.full_name || selectedUser.email}</h2><p>{selectedUser.email || 'Email unavailable'} · {selectedUser.institution_name || 'Institution unavailable'} · {selectedUser.department_name || 'Department unavailable'}</p></div><span className={`ticket-status-badge ${isVolunteer ? 'is-active' : 'is-revoked'}`}>{isVolunteer ? 'Volunteer role active' : 'Volunteer role inactive'}</span></div>
+              <button className="volunteer-profile-close" type="button" aria-label="Close volunteer profile" onClick={() => setSelectedUserId('')}>×</button>
+            </header>
+            <div className="volunteer-profile-modal-body">
+              {!isVolunteer
+                ? <p className="admin-muted">Assign the volunteer role before managing event assignments or item permissions.</p>
+                : <>
+                  <div className="volunteer-management-subsection">
+                    <div className="admin-section-heading"><div><h3>Assigned Events</h3><p>Event-scoped ticket access uses the existing Phase 5 assignment RPCs.</p></div></div>
+                    <form className="volunteer-search-form" onSubmit={(event) => void handleAssignEvent(event)}>
+                      <label className="form-field"><span>Event</span><select value={eventId} onChange={(event) => setEventId(event.target.value)} required disabled={managementLoading || !managementData?.events?.length}><option value="">Select an event</option>{(managementData?.events || []).map((event) => <option value={event.id} key={event.id}>{event.title}</option>)}</select></label>
+                      <button className="button button-primary button-small" type="submit" disabled={!eventId || Boolean(busyAction)}>Assign event</button>
+                    </form>
+                    {selectedEventAssignments.length === 0
+                      ? <p className="admin-muted">No event assignments are recorded for this volunteer.</p>
+                      : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Event</th><th>Assignment</th><th>Action</th></tr></thead><tbody>
+                        {selectedEventAssignments.map((event) => <tr key={event.eventId}><td>{event.eventTitle}</td><td>{event.assignment.is_active ? 'Active' : 'Removed'}</td><td>{event.assignment.is_active && <button className="inline-button danger-link" type="button" disabled={Boolean(busyAction)} onClick={() => void handleRevokeEvent(event)}>Remove assignment</button>}</td></tr>)}
                       </tbody></table></div>}
-              </div>
+                  </div>
 
-              <div className="volunteer-management-subsection">
-                <div className="admin-section-heading"><div><h3>Volunteer Activity</h3><p>Recent distribution records for this volunteer; ticket scans and check-ins are not benefits.</p></div></div>
-                {activityLoading && <p className="admin-muted" role="status">Loading volunteer activity…</p>}
-                {activity.error && activity.userId === selectedUserId && <p className="form-feedback" role="alert">{activity.error}</p>}
-                {!activityLoading && activity.userId === selectedUserId && !activity.error && activity.rows.length === 0 && <p className="admin-muted">No distribution activity is recorded for this volunteer.</p>}
-                {!activityLoading && activity.userId === selectedUserId && activity.rows.length > 0 && (
-                  <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Activity</th><th>Event / item</th><th>Participant</th><th>Quantity</th><th>Time</th></tr></thead><tbody>
-                    {activity.rows.map((row) => <tr key={`${row.activity_type}-${row.activity_id}`}><td>{row.activity_type === 'correction' ? 'Correction' : row.activity_status}</td><td><strong>{row.item_name}</strong><small>{row.event_title}</small></td><td>{row.participant_name}</td><td>{row.quantity > 0 ? `+${row.quantity}` : row.quantity}</td><td>{formatEventDateTime(row.activity_at)}</td></tr>)}
-                  </tbody></table></div>
-                )}
-              </div>
-            </>}
-        </section>
+                  <div className="volunteer-management-subsection">
+                    <div className="admin-section-heading"><div><h3>Distribution Item Permissions</h3><p>Only items within active event assignments are listed. No item access is granted by default.</p></div></div>
+                    {managementData?.distributionError
+                      ? <p className="admin-muted">Phase 6 item permission data is unavailable.</p>
+                      : !activeEventIds.size
+                        ? <p className="admin-muted">Assign this volunteer to an event before granting item access.</p>
+                        : permittedItems.length === 0
+                          ? <p className="admin-muted">No distribution items are configured for the volunteer’s assigned events.</p>
+                          : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Item / event</th><th>Permission</th><th>Action</th></tr></thead><tbody>
+                            {permittedItems.map((item) => {
+                              const active = Boolean(item.assignment?.is_active)
+                              return <tr key={item.item_id}><td><strong>{item.item_name}</strong><small>{item.event_title}</small></td><td>{active ? 'Active' : 'Not granted'}</td><td><button className={`inline-button${active ? ' danger-link' : ''}`} type="button" disabled={Boolean(busyAction)} onClick={() => void handleItemPermission(item, !active)}>{active ? 'Remove item access' : 'Grant item access'}</button></td></tr>
+                            })}
+                          </tbody></table></div>}
+                  </div>
+
+                  <div className="volunteer-management-subsection">
+                    <div className="admin-section-heading"><div><h3>Volunteer Activity</h3><p>Recent distribution records for this volunteer; ticket scans and check-ins are not benefits.</p></div></div>
+                    {activityLoading && <p className="admin-muted" role="status">Loading volunteer activity…</p>}
+                    {activity.error && activity.userId === selectedUserId && <p className="form-feedback" role="alert">{activity.error}</p>}
+                    {!activityLoading && activity.userId === selectedUserId && !activity.error && activity.rows.length === 0 && <p className="admin-muted">No distribution activity is recorded for this volunteer.</p>}
+                    {!activityLoading && activity.userId === selectedUserId && activity.rows.length > 0 && (
+                      <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Activity</th><th>Event / item</th><th>Participant</th><th>Quantity</th><th>Time</th></tr></thead><tbody>
+                        {activity.rows.map((row) => <tr key={`${row.activity_type}-${row.activity_id}`}><td>{row.activity_type === 'correction' ? 'Correction' : row.activity_status}</td><td><strong>{row.item_name}</strong><small>{row.event_title}</small></td><td>{row.participant_name}</td><td>{row.quantity > 0 ? `+${row.quantity}` : row.quantity}</td><td>{formatEventDateTime(row.activity_at)}</td></tr>)}
+                      </tbody></table></div>
+                    )}
+                  </div>
+                </>}
+            </div>
+          </section>
+        </div>
       )}
     </section>
   )

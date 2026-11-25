@@ -11,7 +11,7 @@ function ticketStatus(ticket) {
   return 'VALID FOR ENTRY'
 }
 
-export async function createTicketQrDataUrl(token) {
+export async function createTicketQrDataUrl(token, darkColor = '#133a27') {
   if (typeof token !== 'string' || !/^[0-9a-f]{64}$/i.test(token)) {
     throw new Error('A valid ticket QR credential is not available.')
   }
@@ -20,7 +20,7 @@ export async function createTicketQrDataUrl(token) {
     errorCorrectionLevel: 'Q',
     margin: 2,
     width: 360,
-    color: { dark: '#0B2B1F', light: '#FFFFFF' },
+    color: { dark: darkColor, light: '#FFFFFF' },
   })
 }
 
@@ -31,14 +31,15 @@ export async function downloadTicketPdf(ticket) {
 
   const [{ jsPDF }, qrCode] = await Promise.all([
     import('jspdf'),
-    createTicketQrDataUrl(ticket.ticket_token),
+    createTicketQrDataUrl(ticket.ticket_token, ticket.attendee_type === 'guest' ? '#162e52' : '#133a27'),
   ])
 
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [220, 140] })
   const width = 220
   const height = 140
   const orange = [242, 140, 40]
-  const green = [18, 61, 43]
+  const accent = ticket.attendee_type === 'guest' ? [22, 46, 82] : [19, 58, 39]
+  const qrTint = ticket.attendee_type === 'guest' ? [237, 241, 248] : [237, 244, 239]
   const ink = [30, 45, 37]
   const muted = [98, 111, 101]
   const dateText = displayDate(ticket.event_start)
@@ -54,11 +55,11 @@ export async function downloadTicketPdf(ticket) {
 
   pdf.setFillColor(245, 247, 243)
   pdf.rect(0, 0, width, height, 'F')
-  pdf.setFillColor(...green)
+  pdf.setFillColor(...accent)
   pdf.roundedRect(8, 8, 204, 124, 5, 5, 'F')
   pdf.setFillColor(255, 255, 255)
   pdf.roundedRect(12, 12, 196, 116, 4, 4, 'F')
-  pdf.setFillColor(...green)
+  pdf.setFillColor(...accent)
   pdf.roundedRect(12, 12, 196, 23, 4, 4, 'F')
   pdf.rect(12, 29, 196, 6, 'F')
 
@@ -74,7 +75,7 @@ export async function downloadTicketPdf(ticket) {
   pdf.text('EVENTLY', 35, 25)
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(8)
-  pdf.text('UNIVERSITY EVENT TICKET', 169, 24)
+  pdf.text(ticket.attendee_type === 'guest' ? 'GUEST PASS' : 'PARTICIPANT PASS', 197, 24, { align: 'right' })
 
   pdf.setTextColor(...muted)
   pdf.setFontSize(7)
@@ -115,12 +116,12 @@ export async function downloadTicketPdf(ticket) {
   pdf.setFont('helvetica', 'normal')
   pdf.text(issuedText, 85, 119)
 
-  pdf.setFillColor(234, 242, 236)
+  pdf.setFillColor(...qrTint)
   pdf.roundedRect(153, 42, 44, 44, 3, 3, 'F')
   pdf.addImage(qrCode, 'PNG', 155, 44, 40, 40)
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(8)
-  pdf.setTextColor(...green)
+  pdf.setTextColor(...accent)
   pdf.text(ticketStatus(ticket), 175, 96, { align: 'center' })
   pdf.setDrawColor(226, 232, 226)
   pdf.line(151, 37, 151, 122)

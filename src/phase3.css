@@ -77,6 +77,13 @@
   font-size: 13px;
 }
 
+.registration-alumni-notice {
+  margin-bottom: 16px;
+  border-color: #e8c99a;
+  background: #fff8e9;
+  color: #735018;
+}
+
 .event-skeleton {
   min-height: 340px;
   border: 1px solid var(--border);
@@ -1807,21 +1814,15 @@
 }
 
 .ticket-stat-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-bottom: 22px;
 }
 
-.ticket-assignment-panel,
 .ticket-scanner-panel,
 .ticket-validation-result {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fff;
-}
-
-.ticket-assignment-panel {
-  margin-bottom: 28px;
-  padding: 20px;
 }
 
 .ticket-section-heading {
@@ -1844,56 +1845,6 @@
   font-size: 12px;
 }
 
-.ticket-event-select {
-  max-width: 520px;
-  margin-bottom: 14px;
-}
-
-.ticket-assignment-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  max-width: 720px;
-  margin-bottom: 16px;
-}
-
-.ticket-assignment-form .form-field {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-}
-
-.ticket-assignment-list {
-  display: grid;
-  border-top: 1px solid var(--border);
-}
-
-.ticket-assignment-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.ticket-assignment-row > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.ticket-assignment-row strong {
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.ticket-assignment-row small {
-  overflow-wrap: anywhere;
-  color: var(--muted);
-  font-size: 11px;
-}
-
 .ticket-admin-filters {
   grid-template-columns: minmax(220px, 2fr) minmax(170px, 1fr) minmax(150px, 1fr);
 }
@@ -1907,6 +1858,10 @@
   margin-top: 4px;
   color: var(--muted);
   font-size: 10px;
+}
+
+.ticket-admin-table td .ticket-status-badge {
+  margin-top: 6px;
 }
 
 .ticket-status-badge {
@@ -1965,28 +1920,206 @@
 .ticket-qr-display {
   display: grid;
   justify-items: end;
+  width: 100%;
   gap: 8px;
 }
 
-.ticket-qr-card {
-  display: grid;
-  justify-items: center;
-  gap: 7px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+.boarding-pass {
+  --boarding-accent: #133a27;
+  --boarding-tint: #edf4ef;
+  width: min(100%, 760px);
+  overflow: hidden;
+  border: 1px solid var(--boarding-accent);
+  border-radius: 14px;
   background: #fff;
+  box-shadow: 0 12px 30px rgb(22 46 32 / 10%);
+  color: #202923;
 }
 
-.ticket-qr-card img {
-  width: min(180px, 42vw);
-  height: auto;
-  aspect-ratio: 1;
+.boarding-pass--guest {
+  --boarding-accent: #162e52;
+  --boarding-tint: #edf1f8;
 }
 
-.ticket-qr-card small {
-  max-width: 180px;
+.boarding-pass-header {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 18px;
+  background: var(--boarding-accent);
+  color: #fff;
+}
+
+.boarding-pass-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+.boarding-pass-mark {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 80%);
+  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.boarding-pass-badge {
+  padding: 5px 10px;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  white-space: nowrap;
+}
+
+.boarding-pass-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+}
+
+.boarding-pass-info {
+  min-width: 0;
+  padding: 22px;
+}
+
+.boarding-pass-field-label,
+.boarding-pass-details dt {
+  color: #68746c;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.boarding-pass-info h2 {
+  margin: 4px 0 20px;
+  color: var(--boarding-accent);
+  font-size: clamp(20px, 3vw, 28px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.boarding-pass-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px 18px;
+  margin: 0;
+}
+
+.boarding-pass-details > div {
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e8eee9;
+}
+
+.boarding-pass-details .boarding-pass-guest-of {
+  grid-column: 1 / -1;
+}
+
+.boarding-pass-details dt {
+  margin-bottom: 4px;
+}
+
+.boarding-pass-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.boarding-pass-type {
+  text-transform: uppercase;
+}
+
+.boarding-pass-details dd small {
+  display: block;
+  margin-top: 2px;
+  color: #68746c;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.boarding-pass-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--boarding-accent) 24%, white);
+  border-radius: 999px;
+  background: var(--boarding-tint);
+  color: var(--boarding-accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.boarding-pass-status.is-revoked {
+  border-color: color-mix(in srgb, var(--boarding-accent) 24%, white);
+  background: var(--boarding-tint);
+  color: var(--boarding-accent);
+}
+
+.boarding-pass-qr-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 18px;
+  border-left: 1px dashed #cbd6ce;
   text-align: center;
+}
+
+.boarding-pass-qr {
+  display: grid;
+  width: min(100%, 190px);
+  aspect-ratio: 1;
+  place-items: center;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--boarding-accent) 20%, white);
+  border-radius: 12px;
+  background: var(--boarding-tint);
+}
+
+.boarding-pass-qr img {
+  width: 100%;
+  height: auto;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+.boarding-pass-valid {
+  color: var(--boarding-accent);
+  font-size: 14px;
+  letter-spacing: 0.12em;
+}
+
+.boarding-pass-qr-panel p,
+.boarding-pass-qr-panel > small {
+  max-width: 190px;
+  margin: 0;
+  color: #536157;
+  text-align: center;
+}
+
+.boarding-pass-qr-panel p {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.boarding-pass-qr-panel > small {
+  font-size: 9px;
+  line-height: 1.45;
 }
 
 .my-ticket-status strong {
@@ -2162,9 +2295,15 @@
 }
 
 .ticket-validation-result.is-invalid,
-.ticket-validation-result.is-not-eligible {
+.ticket-validation-result.is-not-eligible,
+.ticket-validation-result.is-already-received {
   border-color: #edccca;
   background: #fff7f6;
+}
+
+.ticket-validation-result.is-not-eligible h2,
+.ticket-validation-result.is-already-received h2 {
+  color: #a53d36;
 }
 
 .ticket-result-code {
@@ -2184,7 +2323,8 @@
 }
 
 .ticket-validation-result.is-invalid .ticket-result-code,
-.ticket-validation-result.is-not-eligible .ticket-result-code {
+.ticket-validation-result.is-not-eligible .ticket-result-code,
+.ticket-validation-result.is-already-received .ticket-result-code {
   background: #fcebea;
   color: #a53d36;
 }
@@ -2235,28 +2375,9 @@
     width: 100%;
   }
 
-  .ticket-assignment-panel,
   .ticket-scanner-panel,
   .ticket-validation-result {
     padding: 15px;
-  }
-
-  .ticket-assignment-form {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .ticket-assignment-form > .button {
-    width: 100%;
-  }
-
-  .ticket-assignment-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .ticket-assignment-row .inline-button {
-    grid-column: 1 / -1;
-    justify-self: start;
   }
 
   .ticket-admin-filters {
@@ -2999,13 +3120,21 @@
   font-weight: 700;
 }
 
-.continuous-result-card.is-already_received {
-  border-color: #ead4a9;
-  background: #fff9ed;
+.continuous-result-card.is-already_received,
+.continuous-result-card.is-not_eligible {
+  border-color: #edccca;
+  background: #fff7f6;
 }
 
-.continuous-result-card.is-already_received span {
-  color: #8a5a16;
+.continuous-result-card.is-already_received span,
+.continuous-result-card.is-not_eligible span {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fcebea;
+  color: #a53d36;
   font-weight: 700;
 }
 
@@ -3278,11 +3407,28 @@
 }
 
 .volunteer-distribution-scanner .ticket-validation-result.is-distribution-complete {
-  background: #e6f0e6;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
 }
 
-.volunteer-distribution-scanner .ticket-validation-result.is-already-received {
-  background: #f4eddb;
+.volunteer-distribution-scanner .ticket-validation-result.is-already-received,
+.volunteer-distribution-scanner .ticket-validation-result.is-not-eligible {
+  border: 1px solid #edccca;
+  background: #fff7f6;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-already-received h2,
+.volunteer-distribution-scanner .ticket-validation-result.is-not-eligible h2 {
+  color: #a53d36;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-not-applicable {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-not-applicable h2 {
+  color: #475569;
 }
 
 .volunteer-distribution-scanner .ticket-validation-result.is-invalid-ticket {
@@ -3290,13 +3436,19 @@
 }
 
 .volunteer-distribution-scanner .ticket-validation-result.is-distribution-complete .ticket-result-code {
-  background: #d2e5d4;
-  color: var(--volunteer-deep-green);
+  background: #dcfce7;
+  color: #133a27;
 }
 
-.volunteer-distribution-scanner .ticket-validation-result.is-already-received .ticket-result-code {
-  background: #eadbb8;
-  color: #704d17;
+.volunteer-distribution-scanner .ticket-validation-result.is-already-received .ticket-result-code,
+.volunteer-distribution-scanner .ticket-validation-result.is-not-eligible .ticket-result-code {
+  background: #fcebea;
+  color: #a53d36;
+}
+
+.volunteer-distribution-scanner .ticket-validation-result.is-not-applicable .ticket-result-code {
+  background: #e2e8f0;
+  color: #475569;
 }
 
 .volunteer-distribution-scanner .ticket-validation-result.is-invalid-ticket .ticket-result-code {
@@ -3365,18 +3517,73 @@
 }
 
 .volunteer-distribution-scanner .continuous-result-card.is-distributed {
-  background: #e2efe3;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-distributed span {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #133a27;
+  font-weight: 700;
 }
 
 .volunteer-distribution-scanner .continuous-result-card.is-already_received {
-  background: #f1e7cf;
+  border: 1px solid #edccca;
+  background: #fff7f6;
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-already_received span {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fcebea;
+  color: #a53d36;
+  font-weight: 700;
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-not_applicable {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-not_applicable span {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-weight: 700;
 }
 
 .volunteer-distribution-scanner .continuous-result-card.is-not_eligible,
 .volunteer-distribution-scanner .continuous-result-card.is-invalid_ticket,
 .volunteer-distribution-scanner .continuous-result-card.is-unauthorized,
 .volunteer-distribution-scanner .continuous-result-card.is-inventory_error {
-  background: #f3e5e1;
+  border: 1px solid #edccca;
+  background: #fff7f6;
+}
+
+.volunteer-distribution-scanner .continuous-result-card.is-not_eligible span,
+.volunteer-distribution-scanner .continuous-result-card.is-invalid_ticket span,
+.volunteer-distribution-scanner .continuous-result-card.is-unauthorized span,
+.volunteer-distribution-scanner .continuous-result-card.is-inventory_error span {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fcebea;
+  color: #a53d36;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {
@@ -4606,9 +4813,84 @@
   margin: 0;
 }
 
-.volunteer-profile-panel > .admin-section-heading {
+.volunteer-profile-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
   align-items: center;
-  margin-bottom: 18px;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgb(11 27 19 / 58%);
+}
+
+.volunteer-profile-modal {
+  display: flex;
+  flex: 0 1 980px;
+  flex-direction: column;
+  width: min(100%, 980px);
+  max-height: 90vh;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #e3e9e3;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 24%);
+}
+
+.volunteer-profile-modal-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+}
+
+.volunteer-profile-modal-header .admin-section-heading {
+  align-items: flex-start;
+  flex: 1;
+  margin: 0;
+}
+
+.volunteer-profile-modal-header .admin-section-heading h2 {
+  margin: 0 0 6px;
+}
+
+.volunteer-profile-modal-header .eyebrow {
+  margin-bottom: 8px;
+}
+
+.volunteer-profile-close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--green);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.volunteer-profile-close:hover {
+  background: var(--soft-green);
+}
+
+.volunteer-profile-modal-body {
+  min-height: 0;
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 0 28px 28px;
+  overscroll-behavior: contain;
 }
 
 .volunteer-management-subsection {
@@ -4663,6 +4945,31 @@
   .volunteer-management-page > .admin-section-panel {
     padding: 14px;
   }
+
+  .volunteer-profile-backdrop {
+    align-items: center;
+    padding: 12px;
+  }
+
+  .volunteer-profile-modal {
+    max-height: 92vh;
+    border-radius: 12px;
+  }
+
+  .volunteer-profile-modal-header {
+    gap: 10px;
+    padding: 18px 16px 14px;
+  }
+
+  .volunteer-profile-modal-header .admin-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .volunteer-profile-modal-body {
+    padding: 0 16px 20px;
+  }
 }
 
 html:has(.registration-details-backdrop) {
@@ -4671,6 +4978,11 @@ html:has(.registration-details-backdrop) {
 }
 
 body:has(.registration-details-backdrop) {
+  overflow: hidden;
+}
+
+html:has(.volunteer-profile-backdrop),
+body:has(.volunteer-profile-backdrop) {
   overflow: hidden;
 }
 
@@ -5046,9 +5358,8 @@ body:has(.admin-layout) .site-footer {
   justify-items: start;
 }
 
-.registration-details-dialog .ticket-qr-card {
-  max-width: 100%;
-  overflow-wrap: anywhere;
+.registration-details-dialog .boarding-pass {
+  width: 100%;
 }
 
 @media (max-width: 620px) {
@@ -5080,6 +5391,46 @@ body:has(.admin-layout) .site-footer {
 
   .registration-details-dialog .my-event-benefit {
     gap: 10px;
+  }
+}
+
+@media (max-width: 680px) {
+  .boarding-pass-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .boarding-pass-qr-panel {
+    border-top: 1px dashed #cbd6ce;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .boarding-pass-header {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .boarding-pass-brand {
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .boarding-pass-badge {
+    padding: 5px 8px;
+    font-size: 8px;
+  }
+
+  .boarding-pass-info {
+    padding: 16px;
+  }
+
+  .boarding-pass-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .boarding-pass-qr-panel {
+    padding: 16px;
   }
 }
 

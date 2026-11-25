@@ -10,7 +10,7 @@ function AdminLayout({ children }) {
     { href: '/admin/events', label: 'Manage Events', active: path === '/admin/events' || (/^\/admin\/events\/[^/]+/.test(path) && path !== '/admin/events/create') },
     { href: '/admin/payments', label: 'Payment Management', active: path === '/admin/payments' },
     { href: '/admin/volunteer-management', label: 'Volunteer Assign', active: path === '/admin/volunteer-management' },
-    { href: '/admin/tickets', label: 'Volunteer Management', active: path === '/admin/tickets' },
+    { href: '/admin/tickets', label: 'Ticket Management', active: path === '/admin/tickets' },
     { href: '/admin/distributions', label: 'Distributions', active: path === '/admin/distributions' },
     { href: '/admin/ticket-scanner', label: 'Ticket Scanner', active: path === '/admin/ticket-scanner' },
     { href: '/admin/registrations', label: 'All Registrations', active: path === '/admin/registrations' },

@@ -14,6 +14,27 @@ import { completeEventRegistration, getRegistrationByEvent, registerForEvent } f
 
 const participantTypes = ['student', 'teacher', 'alumni']
 
+function normalizeChildAgeCategory(value) {
+  const category = String(value || '').trim().toLowerCase()
+  if (['under_6', 'under_6_years'].includes(category)) return 'under_6'
+  if (['above_6', 'above_6_years', '6_plus'].includes(category)) return 'above_6'
+  return ''
+}
+
+function getChildGuestFee(event, category) {
+  const normalizedCategory = normalizeChildAgeCategory(category)
+  if (normalizedCategory === 'under_6') return Number(event?.child_under_6_fee || 0)
+  if (normalizedCategory === 'above_6') return Number(event?.child_above_6_fee || 0)
+  return 0
+}
+
+function childAgeCategoryLabel(category) {
+  const normalizedCategory = normalizeChildAgeCategory(category)
+  if (normalizedCategory === 'under_6') return 'Under 6 Years'
+  if (normalizedCategory === 'above_6') return 'Above 6 Years'
+  return ''
+}
+
 function registrationErrorMessage(error) {
   const message = String(error?.message || '').toLowerCase()
   if (error?.registrationStage === 'payment_proof_upload') {
@@ -76,8 +97,6 @@ function EventRegistration({ slug }) {
     remainingCapacity: 0,
     relationships: [],
     commonFee: 0,
-    childUnder6Fee: 0,
-    childAbove6Fee: 0,
   })
   const [bringingGuests, setBringingGuests] = useState(false)
   const [guests, setGuests] = useState([])
@@ -90,6 +109,12 @@ function EventRegistration({ slug }) {
   const [idempotencyKey, setIdempotencyKey] = useState('')
   const [copiedPaymentAccount, setCopiedPaymentAccount] = useState(null)
   const [paymentCopyError, setPaymentCopyError] = useState('')
+  const [profileType, setProfileType] = useState('')
+  const allowedParticipantTypes = useMemo(() => (
+    event?.alumni_allowed === false
+      ? participantTypes.filter((type) => type !== 'alumni')
+      : participantTypes
+  ), [event?.alumni_allowed])
 
   useEffect(() => {
     if (copiedPaymentAccount === null) return undefined
@@ -137,15 +162,11 @@ function EventRegistration({ slug }) {
         if (!active) return
         const first = rows[0]
         const commonFee = Number(first?.common_guest_fee ?? rows.find((row) => row.relationship && row.relationship !== 'child')?.guest_fee ?? 0)
-        const childUnder6Fee = Number(first?.child_under_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0)
-        const childAbove6Fee = Number(first?.child_above_6_fee ?? rows.find((row) => row.relationship === 'child')?.guest_fee ?? 0)
         setGuestSettings({
           isEnabled: Boolean(first?.is_enabled),
           maxGuests: Number(first?.max_guests_per_participant || 0),
           remainingCapacity: Number(first?.remaining_guest_capacity || 0),
           commonFee,
-          childUnder6Fee,
-          childAbove6Fee,
           relationships: [
             ...['father', 'mother', 'sister', 'brother', 'husband', 'wife'].map((relationship) => ({
               value: relationship,
@@ -157,7 +178,7 @@ function EventRegistration({ slug }) {
         })
       })
       .catch(() => {
-        if (active) setGuestSettings({ isEnabled: false, maxGuests: 0, remainingCapacity: 0, relationships: [], commonFee: 0, childUnder6Fee: 0, childAbove6Fee: 0 })
+        if (active) setGuestSettings({ isEnabled: false, maxGuests: 0, remainingCapacity: 0, relationships: [], commonFee: 0 })
       })
     return () => {
       active = false
@@ -180,11 +201,13 @@ function EventRegistration({ slug }) {
         if (!nextInstitutions.length) setLookupError('No active universities are available for registration. Contact the platform administrator.')
         setRegistration(existingRegistration)
         setDepartments([])
+        const nextProfileType = String(identity?.identity_type || '').toLowerCase()
+        setProfileType(nextProfileType)
         const nextValues = {
           full_name: nextProfile?.full_name || '',
           email: nextProfile?.email || user.email || '',
           phone: nextProfile?.phone || '',
-          participant_type: participantTypes.includes(identity?.identity_type) ? identity.identity_type : '',
+          participant_type: allowedParticipantTypes.includes(nextProfileType) ? nextProfileType : '',
           institution_id: identity?.institution_id || '',
           department_id: identity?.department_id || '',
           identity_number: identity?.identity_number || '',
@@ -205,6 +228,7 @@ function EventRegistration({ slug }) {
         if (active) {
           setRegistration(null)
           setDepartments([])
+          setProfileType('')
           setValues({
             full_name: '',
             email: user.email || '',
@@ -226,7 +250,7 @@ function EventRegistration({ slug }) {
     return () => {
       active = false
     }
-  }, [authLoading, user, event])
+  }, [authLoading, user, event, allowedParticipantTypes])
 
   useEffect(() => {
     if (!user || !event || !hydratedUserKey) return
@@ -234,7 +258,11 @@ function EventRegistration({ slug }) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(key) || 'null')
       if (saved) {
-        setValues((current) => ({ ...current, ...saved.values }))
+        const savedValues = { ...saved.values }
+        if (event.alumni_allowed === false && savedValues.participant_type === 'alumni') {
+          savedValues.participant_type = ''
+        }
+        setValues((current) => ({ ...current, ...savedValues }))
         setAnswers(saved.answers || {})
         setBringingGuests(Boolean(saved.bringingGuests))
         setGuests(saved.guests || [])
@@ -259,6 +287,7 @@ function EventRegistration({ slug }) {
     () => event ? getRegistrationAvailability(event, counts) : null,
     [event, counts],
   )
+  const alumniRegistrationBlocked = event?.alumni_allowed === false && profileType === 'alumni'
   const initialLookupsLoading = Boolean(user && event && hydratedUserKey !== `${user.id}:${event.id}`)
   const allLookupsLoading = lookupsLoading || initialLookupsLoading
 
@@ -309,6 +338,13 @@ function EventRegistration({ slug }) {
     ]) {
       if (!String(values[key] || '').trim()) nextErrors[key] = `${label} is required.`
     }
+    if (alumniRegistrationBlocked) {
+      nextErrors.participant_type = 'Your profile is set to Alumni, and alumni registration is not enabled for this event.'
+    } else if (values.participant_type && !allowedParticipantTypes.includes(values.participant_type)) {
+      nextErrors.participant_type = event.alumni_allowed === false && values.participant_type === 'alumni'
+        ? 'Alumni registration is not enabled for this event.'
+        : 'Select an available participant type.'
+    }
     if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) nextErrors.email = 'Enter a valid email address.'
     if (values.phone && !/^[+\d\s().-]{8,20}$/.test(values.phone)) nextErrors.phone = 'Enter a valid phone number.'
     if (values.institution_id && !institutions.some((institution) => institution.id === values.institution_id)) {
@@ -338,7 +374,7 @@ function EventRegistration({ slug }) {
         if (!guestSettings.relationships.some((relationship) => relationship.value === guest.relationship)) {
           nextErrors[`guest_relationship_${index}`] = 'Select an enabled guest relationship.'
         }
-        if (guest.relationship === 'child' && !['under_6', 'above_6'].includes(guest.child_age_category)) {
+        if (guest.relationship === 'child' && !normalizeChildAgeCategory(guest.child_age_category)) {
           nextErrors[`guest_age_${index}`] = 'Select a child age category.'
         }
         if (guest.relationship !== 'child' && guest.child_age_category) {
@@ -373,11 +409,7 @@ function EventRegistration({ slug }) {
     const grandTotal = (Number(values.participant_type ? event[`${values.participant_type}_fee`] : 0) || 0)
       + (bringingGuests ? guests.reduce((total, guest) => {
         if (guest.relationship === 'child') {
-          return total + Number(guest.child_age_category === 'under_6'
-            ? guestSettings.childUnder6Fee
-            : guest.child_age_category === 'above_6'
-              ? guestSettings.childAbove6Fee
-              : 0)
+          return total + getChildGuestFee(event, guest.child_age_category)
         }
         return total + Number(guestSettings.commonFee)
       }, 0) : 0)
@@ -407,7 +439,9 @@ function EventRegistration({ slug }) {
         guests: bringingGuests ? guests.map((guest) => ({
           full_name: guest.full_name.trim(),
           relationship: guest.relationship,
-          child_age_category: guest.relationship === 'child' ? guest.child_age_category : null,
+          child_age_category: guest.relationship === 'child'
+            ? normalizeChildAgeCategory(guest.child_age_category)
+            : null,
         })) : [],
       }
       let result
@@ -488,11 +522,7 @@ function EventRegistration({ slug }) {
   const participantFee = values.participant_type ? event[`${values.participant_type}_fee`] : null
   const selectedGuestFees = guests.map((guest) => (
     guest.relationship === 'child'
-      ? guest.child_age_category === 'under_6'
-        ? guestSettings.childUnder6Fee
-        : guest.child_age_category === 'above_6'
-          ? guestSettings.childAbove6Fee
-          : 0
+      ? getChildGuestFee(event, guest.child_age_category)
       : guestSettings.relationships.find((relationship) => relationship.value === guest.relationship)?.fee || guestSettings.commonFee
   ))
   const guestFeeTotal = selectedGuestFees.reduce((total, fee) => total + Number(fee), 0)
@@ -526,7 +556,7 @@ function EventRegistration({ slug }) {
                 {bringingGuests && guests.map((guest, index) => (
                   <div key={index}>
                     <dt>{guest.full_name} — {guest.relationship === 'child'
-                      ? `Child (${guest.child_age_category === 'under_6' ? 'Under 6 Years' : 'Above 6 Years'})`
+                      ? `Child — ${childAgeCategoryLabel(guest.child_age_category)}`
                       : guest.relationship}</dt>
                     <dd>{formatFee(selectedGuestFees[index])}</dd>
                   </div>
@@ -576,7 +606,7 @@ function EventRegistration({ slug }) {
             )}
             <div className="registration-form-actions">
               <button className="button button-outline" type="button" disabled={submitting} onClick={() => setStep(1)}>Back to Details</button>
-              <button className="button button-primary" type="submit" disabled={submitting}>{submitting ? 'Completing registration…' : 'Complete Registration'}</button>
+              <button className="button button-primary" type="submit" disabled={submitting || alumniRegistrationBlocked}>{submitting ? 'Completing registration…' : 'Complete Registration'}</button>
             </div>
           </form>
           <aside className="registration-summary-card">
@@ -609,11 +639,12 @@ function EventRegistration({ slug }) {
         <form className="registration-form" onSubmit={handleContinue} noValidate>
           <div className="registration-form-section">
             <h2>Your details</h2>
+            {alumniRegistrationBlocked && <p className="inline-notice registration-alumni-notice" role="status">Your profile is set to Alumni, and alumni registration is not enabled for this event. You cannot submit a registration.</p>}
             <div className="form-grid">
               <label className="form-field"><span>Full name</span><input value={values.full_name} onChange={(event) => updateValue('full_name', event.target.value)} autoComplete="name" aria-invalid={Boolean(errors.full_name)} />{errors.full_name && <small className="field-error">{errors.full_name}</small>}</label>
               <label className="form-field"><span>Email address</span><input type="email" value={values.email} onChange={(event) => updateValue('email', event.target.value)} autoComplete="email" aria-invalid={Boolean(errors.email)} />{errors.email && <small className="field-error">{errors.email}</small>}</label>
               <label className="form-field"><span>Phone number</span><input type="tel" value={values.phone} onChange={(event) => updateValue('phone', event.target.value)} autoComplete="tel" aria-invalid={Boolean(errors.phone)} />{errors.phone && <small className="field-error">{errors.phone}</small>}</label>
-              <label className="form-field"><span>Participant type</span><select value={values.participant_type} onChange={(event) => updateValue('participant_type', event.target.value)} aria-invalid={Boolean(errors.participant_type)}><option value="">Select type</option>{participantTypes.map((type) => <option value={type} key={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}</select>{errors.participant_type && <small className="field-error">{errors.participant_type}</small>}</label>
+              <label className="form-field"><span>Participant type</span><select value={values.participant_type} onChange={(event) => updateValue('participant_type', event.target.value)} aria-invalid={Boolean(errors.participant_type)}><option value="">Select type</option>{allowedParticipantTypes.map((type) => <option value={type} key={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}</select>{errors.participant_type && <small className="field-error">{errors.participant_type}</small>}</label>
               <label className="form-field"><span>University</span><select value={values.institution_id} onChange={(event) => void onInstitutionChange(event.target.value)} disabled={allLookupsLoading || !institutions.length} aria-invalid={Boolean(errors.institution_id)}><option value="">Select university</option>{institutions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{errors.institution_id && <small className="field-error">{errors.institution_id}</small>}</label>
                   <label className="form-field"><span>Department</span><select value={values.department_id} onChange={(event) => updateValue('department_id', event.target.value)} disabled={!values.institution_id || allLookupsLoading} aria-invalid={Boolean(errors.department_id)}><option value="">Select department</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{errors.department_id && <small className="field-error">{errors.department_id}</small>}</label>
               <label className="form-field form-field-last"><span>Student / Employee ID</span><input value={values.identity_number} onChange={(event) => updateValue('identity_number', event.target.value)} aria-invalid={Boolean(errors.identity_number)} />{errors.identity_number && <small className="field-error">{errors.identity_number}</small>}</label>
@@ -683,13 +714,13 @@ function EventRegistration({ slug }) {
                           <label className="form-field">
                             <span>Child Age Category</span>
                             <select
-                              value={guest.child_age_category || ''}
+                              value={normalizeChildAgeCategory(guest.child_age_category)}
                               onChange={(changeEvent) => setGuests((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, child_age_category: changeEvent.target.value } : item))}
                               aria-invalid={Boolean(errors[`guest_age_${index}`])}
                             >
                               <option value="">Select age category</option>
-                              <option value="under_6">Under 6 Years — {formatFee(guestSettings.childUnder6Fee)}</option>
-                              <option value="above_6">Above 6 Years — {formatFee(guestSettings.childAbove6Fee)}</option>
+                              <option value="under_6">Under 6 Years — {formatFee(getChildGuestFee(event, 'under_6'))}</option>
+                              <option value="above_6">Above 6 Years — {formatFee(getChildGuestFee(event, 'above_6'))}</option>
                             </select>
                             {errors[`guest_age_${index}`] && <small className="field-error">{errors[`guest_age_${index}`]}</small>}
                           </label>
@@ -722,7 +753,7 @@ function EventRegistration({ slug }) {
             </div>
           )}
 
-          <button className="button button-primary button-wide auth-submit" type="submit" disabled={submitting || allLookupsLoading || Boolean(formConfigurationError) || !institutions.length || !departments.length}>
+          <button className="button button-primary button-wide auth-submit" type="submit" disabled={submitting || allLookupsLoading || Boolean(formConfigurationError) || alumniRegistrationBlocked || !institutions.length || !departments.length}>
             Continue to Payment {!submitting && <Icon name="arrow" size={18} />}
           </button>
         </form>
@@ -740,7 +771,7 @@ function EventRegistration({ slug }) {
                 <span>
                   Guest {index + 1} — {relationship.label}
                   {guest.relationship === 'child' && guest.child_age_category
-                    ? ` — ${guest.child_age_category === 'under_6' ? 'Under 6 Years' : 'Above 6 Years'}`
+                    ? ` — ${childAgeCategoryLabel(guest.child_age_category)}`
                     : ''}
                 </span>
                 <strong>

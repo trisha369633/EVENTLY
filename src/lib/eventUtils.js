@@ -30,7 +30,11 @@ export function formatFee(value) {
 }
 
 export function getStartingFee(event) {
-  const fees = [event.student_fee, event.teacher_fee, event.alumni_fee]
+  const fees = [
+    event.student_fee,
+    event.teacher_fee,
+    ...(event.alumni_allowed === false ? [] : [event.alumni_fee]),
+  ]
     .filter((value) => value !== null && value !== undefined && value !== '')
     .map(Number)
     .filter(Number.isFinite)

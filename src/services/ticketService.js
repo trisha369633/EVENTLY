@@ -13,6 +13,14 @@ export async function getMyAttendeeTickets() {
   return data || []
 }
 
+export async function getEventTicketPassMeta(ticketId) {
+  const { data, error } = await getSupabaseClient().rpc('get_event_ticket_pass_meta', {
+    p_ticket_id: Number(ticketId),
+  })
+  if (error) throw error
+  return Array.isArray(data) ? data[0] || null : data || null
+}
+
 export async function validateAttendeeTicket({ eventId, token }) {
   const { data, error } = await getSupabaseClient().rpc('validate_attendee_ticket', {
     p_event_id: Number(eventId),
@@ -68,6 +76,26 @@ export async function getAdminEventTickets({
 } = {}) {
   await requireSuperAdmin()
   const { data, error } = await getSupabaseClient().rpc('get_admin_event_tickets', {
+    p_event_id: eventId ? Number(eventId) : null,
+    p_status: status || null,
+    p_search: String(search || '').trim() || null,
+    p_limit: limit,
+    p_offset: offset,
+  })
+  if (error) throw error
+  const tickets = data || []
+  return { tickets, count: Number(tickets[0]?.total_count || 0) }
+}
+
+export async function getAdminTicketRecords({
+  eventId = '',
+  status = '',
+  search = '',
+  limit = 20,
+  offset = 0,
+} = {}) {
+  await requireSuperAdmin()
+  const { data, error } = await getSupabaseClient().rpc('get_admin_ticket_records', {
     p_event_id: eventId ? Number(eventId) : null,
     p_status: status || null,
     p_search: String(search || '').trim() || null,
